@@ -280,8 +280,11 @@ const Calendar = () => {
                       type="button"
                       onClick={() => setColor(c.hex)}
                       className={`color-dot-btn ${color === c.hex ? 'selected' : ''}`}
-                      style={{ background: c.hex }}
-                    />
+                      style={{ background: c.hex, color: '#FFFFFF', fontSize: '14px', fontWeight: 'bold', display: 'grid', placeItems: 'center' }}
+                      title={c.name}
+                    >
+                      {color === c.hex ? '✓' : ''}
+                    </button>
                   ))}
                 </div>
               </div>

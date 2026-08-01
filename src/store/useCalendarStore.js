@@ -48,6 +48,8 @@ export const useCalendarStore = create((set, get) => ({
         date: eventData.date || new Date().toISOString().split('T')[0],
         time: eventData.time || '12:00',
         type: eventData.type || 'Event',
+        color: eventData.color || '#EF4444',
+        description: eventData.description || '',
         notes: eventData.notes || '',
         createdAt: new Date().toISOString()
       };
