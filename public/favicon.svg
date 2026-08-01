@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" width="64" height="64">
+  <defs>
+    <linearGradient id="archGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7C3AED"/>
+      <stop offset="50%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="starGrad" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E0E7FF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Neo-Brutalist Rounded Shield -->
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#archGrad)" stroke="#000000" stroke-width="4" />
+
+  <!-- Futuristic Geometric 'A' Crest -->
+  <path d="M32 12 L47 48 H37.5 L33.8 38.5 H30.2 L26.5 48 H17 L32 12 Z" fill="url(#starGrad)" stroke="#000000" stroke-width="3" stroke-linejoin="round" />
+  
+  <!-- Central 'A' Cross cutout -->
+  <path d="M32 22 L35.2 31 H28.8 L32 22 Z" fill="#4F46E5" stroke="#000000" stroke-width="2" stroke-linejoin="round" />
+
+  <!-- Asterisk / Starburst Sparkle Emblem -->
+  <path d="M47 11 L48.8 16.2 L54 18 L48.8 19.8 L47 25 L45.2 19.8 L40 18 L45.2 16.2 Z" fill="#FFE600" stroke="#000000" stroke-width="2" stroke-linejoin="round" />
+</svg>
