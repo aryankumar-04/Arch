@@ -88,13 +88,32 @@ const Dashboard = () => {
     hour12: true
   }).toLowerCase();
 
-  // 1. Sleep Last Night
+  // 1. Sleep Last Night (Night Sleep + Evening Nap)
   const todayStr = new Date().toISOString().split('T')[0];
   const todayEntry = entries.find(e => e.date === todayStr);
-  const sleepHours = todayEntry && todayEntry.sleepHours ? todayEntry.sleepHours : '—';
+
+  let sleepHours = '—';
+  if (todayEntry) {
+    let nightHours = 0;
+    if (typeof todayEntry.sleepCycle?.duration === 'number') {
+      nightHours = todayEntry.sleepCycle.duration;
+    } else if (todayEntry.sleepHours) {
+      nightHours = parseFloat(todayEntry.sleepHours) || 0;
+    }
+
+    let napHours = 0;
+    if (typeof todayEntry.eveningNap?.duration === 'number') {
+      napHours = todayEntry.eveningNap.duration;
+    } else if (todayEntry.napHours) {
+      napHours = parseFloat(todayEntry.napHours) || 0;
+    }
+
+    const total = nightHours + napHours;
+    sleepHours = total > 0 ? total.toFixed(1) : (todayEntry.sleepHours || '0.0');
+  }
 
   // 2. Tasks Due Today
-  const tasksDueToday = tasks.filter(t => t.status !== 'done');
+  const tasksDueToday = tasks.filter(t => t.status !== 'completed');
 
   // 3. This Month's Spending
   const currentMonth = now.getMonth();
@@ -121,7 +140,16 @@ const Dashboard = () => {
   // Current Streaks
   const journalStreak = entries.length;
   const gymStreak = workouts.length;
-  const taskStreak = tasks.filter(t => t.status === 'done').length;
+  const taskStreak = tasks.filter(t => {
+    if (t.status !== 'completed') return false;
+    if (!t.completedAt) return false;
+    try {
+      const completedDateStr = new Date(t.completedAt).toISOString().split('T')[0];
+      return completedDateStr === todayStr;
+    } catch (e) {
+      return false;
+    }
+  }).length;
 
   // Today's Mood handler
   const handleMoodSelect = async (moodEmoji) => {
@@ -154,10 +182,13 @@ const Dashboard = () => {
       {/* ROW 1: 5 Stat Cards */}
       <div className="dash-grid mb-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         {/* 1. Sleep Last Night */}
-        <div className="card card-hover" style={{ padding: '16px' }}>
+        <div className="card card-hover" style={{ padding: '16px' }} title="Combined Night Sleep + Evening Nap">
           <div className="card-title" style={{ fontSize: '0.75rem' }}>😴 SLEEP LAST NIGHT</div>
-          <div className="card-value" style={{ fontSize: '1.8rem', borderBottom: 'var(--bw) solid var(--border)', paddingBottom: '8px' }}>
+          <div className="card-value" style={{ fontSize: '1.8rem', borderBottom: 'var(--bw) solid var(--border)', paddingBottom: '4px' }}>
             {sleepHours !== '—' ? `${sleepHours} HRS` : '— HRS'}
+          </div>
+          <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text2)', marginTop: '4px', textTransform: 'uppercase' }}>
+            NIGHT + NAP
           </div>
         </div>
 
@@ -225,16 +256,27 @@ const Dashboard = () => {
         </div>
 
         {/* 2. TOP 3 PRIORITIES */}
-        <div className="card card-hover" style={{ padding: '16px' }}>
+        <div className="card card-hover" style={{ padding: '16px', minWidth: 0, overflow: 'hidden' }}>
           <div className="card-title">🎯 TOP 3 PRIORITIES</div>
           {tasksDueToday.length === 0 ? (
             <p className="text-muted" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
               No tasks due today 🎉
             </p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
               {tasksDueToday.slice(0, 3).map(task => (
-                <div key={task.id} style={{ fontSize: '0.85rem', fontWeight: 800 }}>
+                <div
+                  key={task.id}
+                  title={task.title}
+                  style={{
+                    fontSize: '0.85rem',
+                    fontWeight: 800,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '100%'
+                  }}
+                >
                   • {task.title}
                 </div>
               ))}

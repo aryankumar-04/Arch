@@ -51,20 +51,33 @@ export const useExpenseStore = create((set, get) => ({
         createdAt: new Date().toISOString()
       };
 
-      let savedExpense = { id: `local_${Date.now()}`, ...newExpense };
-
-      if (user && uid !== 'guest' && uid !== 'guest_user') {
-        try {
-          const docRef = await addDoc(collection(db, 'users', uid, 'expenses'), newExpense);
-          savedExpense = { id: docRef.id, ...newExpense };
-        } catch (fbErr) {
-          console.error("Firestore write failed:", fbErr);
-        }
+      if (!user || uid === 'guest' || uid === 'guest_user') {
+        const localId = `local_${Date.now()}`;
+        const savedExpense = { id: localId, ...newExpense };
+        const current = get().expenses.filter(e => e.id !== localId);
+        const updated = [savedExpense, ...current];
+        set({ expenses: updated });
+        saveLocalUserBackup('expenses', uid, updated);
+        return savedExpense;
       }
 
-      const updated = [savedExpense, ...get().expenses];
-      set({ expenses: updated });
-      saveLocalUserBackup('expenses', uid, updated);
+      const tempId = `local_${Date.now()}`;
+      const tempExpense = { id: tempId, ...newExpense };
+      const currentExpenses = get().expenses.filter(e => e.id !== tempId);
+      set({ expenses: [tempExpense, ...currentExpenses] });
+
+      let savedExpense = tempExpense;
+      try {
+        const docRef = await addDoc(collection(db, 'users', uid, 'expenses'), newExpense);
+        savedExpense = { id: docRef.id, ...newExpense };
+      } catch (fbErr) {
+        console.error("Firestore write failed:", fbErr);
+      }
+
+      const latestExpenses = get().expenses.filter(e => e.id !== tempId && e.id !== savedExpense.id);
+      const reconciled = [savedExpense, ...latestExpenses].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      set({ expenses: reconciled });
+      saveLocalUserBackup('expenses', uid, reconciled);
       return savedExpense;
     } catch (error) {
       console.error("Error adding expense:", error);

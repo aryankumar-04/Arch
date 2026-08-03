@@ -3,7 +3,11 @@
  * from public movie metadata APIs (OMDb with fallback keys & iTunes API).
  */
 
-const OMDB_KEYS = ['trilogy', 'b78e24c2', '33857ca2', 'b8449c2d', '9f7c03dd', '450702d7', '76722d3b'];
+const envOmdbKey = import.meta.env.VITE_OMDB_API_KEY;
+const OMDB_KEYS = [
+  ...(envOmdbKey ? [envOmdbKey] : []),
+  'trilogy', 'b78e24c2', '33857ca2', 'b8449c2d', '9f7c03dd', '450702d7', '76722d3b'
+];
 
 /**
  * Fetches exact movie metadata.

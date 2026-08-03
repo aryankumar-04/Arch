@@ -1,17 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGoalStore } from '../store';
 import StatCard from '../components/common/StatCard';
 import Modal from '../components/common/Modal';
-import { PlusIcon, TrashIcon } from '../components/common/Icons';
+import Button from '../components/common/Button';
+import Skeleton from '../components/common/Skeleton';
+import DuplicateErrorBanner from '../components/common/DuplicateErrorBanner';
+import { PlusIcon, TrashIcon, EditIcon } from '../components/common/Icons';
 
 const Goals = () => {
   const {
-    goals, categories, fetchGoals, addGoal, addCategory, toggleGoalStatus, toggleMilestone, deleteGoal
+    goals, categories, loading, fetchGoals, addGoal, updateGoal, addCategory, deleteCategory, toggleGoalStatus, toggleMilestone, deleteGoal
   } = useGoalStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [newCatInput, setNewCatInput] = useState('');
+  const [editingGoalId, setEditingGoalId] = useState(null);
+  const [duplicateError, setDuplicateError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const modalBodyRef = useRef(null);
+
+  useEffect(() => {
+    if (duplicateError && modalBodyRef.current) {
+      modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [duplicateError]);
+
+  // Category deletion state
+  const [categoryError, setCategoryError] = useState(null);
+  const [confirmDeleteCat, setConfirmDeleteCat] = useState(null);
 
   const [goalForm, setGoalForm] = useState({
     title: '',
@@ -26,12 +43,27 @@ const Goals = () => {
   }, [fetchGoals]);
 
   const handleOpenModal = () => {
+    setEditingGoalId(null);
+    setDuplicateError(null);
     setGoalForm({
       title: '',
       description: '',
       category: categories[0] || 'Short Term',
       targetDate: '',
       milestonesText: ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditGoalModal = (goal) => {
+    setEditingGoalId(goal.id);
+    setDuplicateError(null);
+    setGoalForm({
+      title: goal.title || '',
+      description: goal.description || '',
+      category: goal.category || (categories[0] || 'Short Term'),
+      targetDate: goal.targetDate || '',
+      milestonesText: goal.milestones ? goal.milestones.map(m => m.title).join('\n') : ''
     });
     setIsModalOpen(true);
   };
@@ -45,22 +77,71 @@ const Goals = () => {
     }
   };
 
+  const handleDeleteCategoryClick = (catName) => {
+    setCategoryError(null);
+    const catGoals = goals.filter(g => (g.category || '').trim().toLowerCase() === catName.trim().toLowerCase());
+    if (catGoals.length > 0) {
+      const res = deleteCategory(catName);
+      if (res && res.error) {
+        setCategoryError({
+          title: res.title || '⚠️ CANNOT DELETE CATEGORY',
+          message: res.message
+        });
+      }
+      return;
+    }
+    setConfirmDeleteCat(catName);
+  };
+
+  const handleConfirmDeleteCategory = () => {
+    if (!confirmDeleteCat) return;
+    deleteCategory(confirmDeleteCat);
+    setConfirmDeleteCat(null);
+    setCategoryError(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!goalForm.title.trim()) return;
+    setDuplicateError(null);
+    setIsSubmitting(true);
 
-    const milestones = goalForm.milestonesText
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
-      .map((line, idx) => ({ id: `m_${idx}_${Date.now()}`, title: line, completed: false }));
+    try {
+      const milestones = goalForm.milestonesText
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map((line, idx) => ({ id: `m_${idx}_${Date.now()}`, title: line, completed: false }));
 
-    await addGoal({
-      ...goalForm,
-      milestones
-    });
+      const goalData = {
+        title: goalForm.title,
+        description: goalForm.description,
+        category: goalForm.category,
+        targetDate: goalForm.targetDate,
+        milestones
+      };
 
-    setIsModalOpen(false);
+      let res;
+      if (editingGoalId) {
+        res = await updateGoal(editingGoalId, goalData);
+      } else {
+        res = await addGoal(goalData);
+      }
+
+      if (res && res.error === 'duplicate') {
+        setDuplicateError({
+          title: res.title || '⚠️ GOAL ALREADY EXISTS IN THIS CATEGORY',
+          message: res.message,
+          _t: Date.now()
+        });
+        return;
+      }
+
+      setIsModalOpen(false);
+      setEditingGoalId(null);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Metrics
@@ -114,16 +195,45 @@ const Goals = () => {
         />
       </div>
 
+      {/* Category Deletion Error Banner */}
+      {categoryError && (
+        <DuplicateErrorBanner
+          title={categoryError.title}
+          message={categoryError.message}
+          onClose={() => setCategoryError(null)}
+        />
+      )}
+
       {/* Dynamic Category Sections */}
-      {categories.map(cat => {
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <Skeleton type="text" width="30%" height="24px" />
+              <Skeleton type="card" height="80px" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        categories.map(cat => {
         const catGoals = goals.filter(g => g.category === cat);
         return (
           <div key={cat} className="mb-32">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-              <span style={{ fontSize: '1.2rem' }}>{getCategoryEmoji(cat)}</span>
-              <h2 style={{ fontSize: '1.1rem', fontWeight: 900, textTransform: 'uppercase' }}>
-                {cat}
-              </h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>{getCategoryEmoji(cat)}</span>
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 900, textTransform: 'uppercase' }}>
+                  {cat}
+                </h2>
+              </div>
+              <button
+                className="btn-icon"
+                style={{ color: 'var(--red)' }}
+                onClick={() => handleDeleteCategoryClick(cat)}
+                title={`Delete ${cat} category`}
+              >
+                <TrashIcon size={16} />
+              </button>
             </div>
 
             {catGoals.length === 0 ? (
@@ -139,13 +249,14 @@ const Goals = () => {
                     toggleGoalStatus={toggleGoalStatus}
                     toggleMilestone={toggleMilestone}
                     deleteGoal={deleteGoal}
+                    onEdit={handleOpenEditGoalModal}
                   />
                 ))}
               </div>
             )}
           </div>
         );
-      })}
+      }))}
 
       {/* Floating Add Button */}
       <button className="fab-btn" onClick={handleOpenModal} title="Add Goal">
@@ -177,9 +288,25 @@ const Goals = () => {
         </form>
       </Modal>
 
-      {/* Add Goal Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="🎯 ADD NEW GOAL">
+      {/* Add / Edit Goal Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingGoalId(null);
+          setDuplicateError(null);
+        }}
+        title={editingGoalId ? "✏️ EDIT GOAL" : "🎯 ADD NEW GOAL"}
+        bodyRef={modalBodyRef}
+      >
         <form onSubmit={handleSubmit}>
+          {duplicateError && (
+            <DuplicateErrorBanner
+              title={duplicateError.title}
+              message={duplicateError.message}
+              onClose={() => setDuplicateError(null)}
+            />
+          )}
           <div className="form-group">
             <label>GOAL TITLE</label>
             <input
@@ -241,18 +368,49 @@ const Goals = () => {
             <button type="button" className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>
               CANCEL
             </button>
-            <button type="submit" className="btn btn-primary">
+            <Button
+              type="submit"
+              variant="primary"
+              loading={isSubmitting}
+              loadingText="SAVING..."
+            >
               SAVE GOAL
-            </button>
+            </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Category Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(confirmDeleteCat)}
+        onClose={() => setConfirmDeleteCat(null)}
+        title="🗑️ DELETE CATEGORY"
+      >
+        <div style={{ padding: '8px 0' }}>
+          <p style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '24px', color: 'var(--text)', lineHeight: 1.4 }}>
+            Are you sure you want to delete the category <strong>"{confirmDeleteCat?.toUpperCase()}"</strong>?
+          </p>
+          <div className="flex flex-between gap-12">
+            <button type="button" className="btn btn-ghost" onClick={() => setConfirmDeleteCat(null)}>
+              CANCEL
+            </button>
+            <button
+              type="button"
+              className="btn"
+              style={{ background: 'var(--red, #DC2626)', color: '#FFFFFF', border: 'var(--bw) solid var(--border)', boxShadow: '3px 3px 0px var(--border)' }}
+              onClick={handleConfirmDeleteCategory}
+            >
+              YES, DELETE CATEGORY
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
 };
 
 // Sub-component for individual Goal Card
-const GoalCard = ({ goal, toggleGoalStatus, toggleMilestone, deleteGoal }) => {
+const GoalCard = ({ goal, toggleGoalStatus, toggleMilestone, deleteGoal, onEdit }) => {
   const isCompleted = goal.status === 'completed';
   const progressPercent = goal.progress || 0;
 
@@ -332,14 +490,25 @@ const GoalCard = ({ goal, toggleGoalStatus, toggleMilestone, deleteGoal }) => {
         >
           {isCompleted ? 'REOPEN' : 'MARK COMPLETED'}
         </button>
-        <button
-          className="btn-icon"
-          style={{ color: 'var(--red)' }}
-          onClick={() => deleteGoal(goal.id)}
-          title="Delete goal"
-        >
-          <TrashIcon size={16} />
-        </button>
+        <div className="flex align-center gap-8">
+          {onEdit && (
+            <button
+              className="btn-icon"
+              onClick={() => onEdit(goal)}
+              title="Edit goal"
+            >
+              <EditIcon size={16} />
+            </button>
+          )}
+          <button
+            className="btn-icon"
+            style={{ color: 'var(--red)' }}
+            onClick={() => deleteGoal(goal.id)}
+            title="Delete goal"
+          >
+            <TrashIcon size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );

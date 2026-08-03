@@ -6,6 +6,9 @@ const Button = memo(({
   size = 'md', 
   icon, 
   className = '', 
+  loading = false,
+  loadingText,
+  disabled = false,
   ...props 
 }) => {
   const variantClass = {
@@ -22,10 +25,20 @@ const Button = memo(({
   return (
     <button 
       className={`btn ${variantClass} ${sizeClass} ${className}`}
+      disabled={disabled || loading}
       {...props}
     >
-      {icon && <span className="btn-icon-wrapper">{icon}</span>}
-      {children}
+      {loading ? (
+        <>
+          <span className="btn-spinner" />
+          {loadingText || children}
+        </>
+      ) : (
+        <>
+          {icon && <span className="btn-icon-wrapper">{icon}</span>}
+          {children}
+        </>
+      )}
     </button>
   );
 });

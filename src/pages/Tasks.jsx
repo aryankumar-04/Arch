@@ -3,22 +3,38 @@ import { useTaskStore } from '../store';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
 import TaskCard from '../components/common/TaskCard';
+import Skeleton from '../components/common/Skeleton';
 import { PlusIcon } from '../components/common/Icons';
 
 const Tasks = () => {
-  const { tasks, loading, fetchTasks, addTask, deleteTask } = useTaskStore();
+  const { tasks, loading, fetchTasks, addTask, toggleTaskStatus, deleteTask } = useTaskStore();
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
 
-  const handleAddTask = (e) => {
+  const handleAddTask = async (e) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
-    addTask(newTaskTitle);
-    setNewTaskTitle('');
+    setIsSubmitting(true);
+    try {
+      await addTask(newTaskTitle);
+      setNewTaskTitle('');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const sortedTasks = [...tasks].sort((a, b) => {
+    const aCompleted = a.status === 'completed';
+    const bCompleted = b.status === 'completed';
+    if (aCompleted !== bCompleted) {
+      return aCompleted ? 1 : -1;
+    }
+    return 0;
+  });
 
   return (
     <div>
@@ -35,7 +51,7 @@ const Tasks = () => {
             value={newTaskTitle}
             onChange={(e) => setNewTaskTitle(e.target.value)}
           />
-          <Button type="submit" variant="primary" icon={<PlusIcon />}>
+          <Button type="submit" variant="primary" icon={<PlusIcon />} loading={isSubmitting} loadingText="Adding...">
             Add Task
           </Button>
         </form>
@@ -43,18 +59,21 @@ const Tasks = () => {
 
       <Card style={{ padding: 0 }}>
         {loading ? (
-          <div className="empty-state">Loading tasks...</div>
-        ) : tasks.length === 0 ? (
+          <div style={{ padding: '20px' }}>
+            <Skeleton type="text" count={4} height="40px" />
+          </div>
+        ) : sortedTasks.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📋</div>
             <p>No tasks found. Add one above!</p>
           </div>
         ) : (
-          tasks.map(task => (
+          sortedTasks.map(task => (
             <TaskCard 
               key={task.id}
               title={task.title}
               status={task.status}
+              onToggleComplete={() => toggleTaskStatus(task.id)}
               onDelete={() => deleteTask(task.id)}
             />
           ))

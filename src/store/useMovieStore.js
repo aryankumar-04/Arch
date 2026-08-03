@@ -7,19 +7,30 @@ import { getLocalUserBackup, saveLocalUserBackup } from '../utils/userStorage';
 export const useMovieStore = create((set, get) => ({
   movies: [],
   loading: false,
+  lastFetched: null,
 
-  fetchMovies: async () => {
-    set({ loading: true });
+  fetchMovies: async (force = false) => {
+    const now = Date.now();
+    const { movies, lastFetched } = get();
+
+    // In-memory cache check (skip fetch if loaded within 5 mins unless forced)
+    if (!force && movies.length > 0 && lastFetched && (now - lastFetched < 5 * 60 * 1000)) {
+      return;
+    }
+
+    set({ loading: movies.length === 0 });
     try {
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
 
       // 1. Hydrate from user-scoped local cache
       const cached = getLocalUserBackup('movies', uid, []);
-      set({ movies: cached });
+      if (movies.length === 0 && cached.length > 0) {
+        set({ movies: cached });
+      }
 
       if (!user) {
-        set({ loading: false });
+        set({ loading: false, lastFetched: now });
         return;
       }
 
@@ -31,7 +42,7 @@ export const useMovieStore = create((set, get) => ({
         ...doc.data()
       })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-      set({ movies: moviesData, loading: false });
+      set({ movies: moviesData, loading: false, lastFetched: now });
       saveLocalUserBackup('movies', uid, moviesData);
     } catch (error) {
       console.error("Error fetching movies from Firestore:", error);
@@ -41,12 +52,29 @@ export const useMovieStore = create((set, get) => ({
 
   addMovie: async (movieData) => {
     try {
+      const cleanTitle = (movieData.title || '').trim();
+      const cleanYear = String(movieData.year || '').trim();
+
+      // Duplicate Check key: title (case-insensitive, trimmed) + year (trimmed)
+      const existing = get().movies.find(m =>
+        (m.title || '').trim().toLowerCase() === cleanTitle.toLowerCase() &&
+        String(m.year || '').trim().toLowerCase() === cleanYear.toLowerCase()
+      );
+
+      if (existing) {
+        return {
+          error: 'duplicate',
+          title: '⚠️ ALREADY IN YOUR LIST',
+          message: `${cleanTitle.toUpperCase()}${cleanYear ? ` (${cleanYear})` : ''} is already added.`
+        };
+      }
+
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
 
       const newMovie = {
-        title: movieData.title || 'Untitled Movie',
-        year: movieData.year || '',
+        title: cleanTitle || 'Untitled Movie',
+        year: cleanYear,
         genre: movieData.genre || '',
         director: movieData.director || '',
         plot: movieData.plot || '',
@@ -58,28 +86,59 @@ export const useMovieStore = create((set, get) => ({
         createdAt: new Date().toISOString()
       };
 
-      let savedMovie = { id: `local_${Date.now()}`, ...newMovie };
+      const tempId = `local_${Date.now()}`;
+      const savedMovie = { id: tempId, ...newMovie };
 
-      if (user) {
-        try {
-          const docRef = await addDoc(collection(db, 'users', uid, 'movies'), newMovie);
-          savedMovie = { id: docRef.id, ...newMovie };
-        } catch (fbErr) {
-          console.warn('Firestore addMovie failed, saving locally:', fbErr);
-        }
-      }
-
+      // 1. Optimistic UI update
       const updated = [savedMovie, ...get().movies];
       set({ movies: updated });
       saveLocalUserBackup('movies', uid, updated);
-      return savedMovie;
+
+      // 2. Background Firestore write
+      if (user) {
+        addDoc(collection(db, 'users', uid, 'movies'), newMovie).then((docRef) => {
+          // Replace tempId with actual Firestore ID
+          const currentMovies = get().movies;
+          const mapped = currentMovies.map(m => m.id === tempId ? { ...m, id: docRef.id } : m);
+          set({ movies: mapped });
+          saveLocalUserBackup('movies', uid, mapped);
+        }).catch((fbErr) => {
+          console.warn('Firestore addMovie background sync failed:', fbErr);
+        });
+      }
+
+      return { success: true, movie: savedMovie };
     } catch (error) {
       console.error("Error adding movie:", error);
+      return { error: 'system', message: error.message };
     }
   },
 
   updateMovie: async (id, updatedFields) => {
     try {
+      const existingMovie = get().movies.find(m => m.id === id);
+      if (!existingMovie) return { error: 'not_found' };
+
+      const newTitle = updatedFields.title !== undefined ? (updatedFields.title || '').trim() : (existingMovie.title || '').trim();
+      const newYear = updatedFields.year !== undefined ? String(updatedFields.year || '').trim() : String(existingMovie.year || '').trim();
+
+      // Duplicate Check: if title or year changed/updated, check against OTHER movies
+      if (updatedFields.title !== undefined || updatedFields.year !== undefined) {
+        const duplicate = get().movies.find(m =>
+          m.id !== id &&
+          (m.title || '').trim().toLowerCase() === newTitle.toLowerCase() &&
+          String(m.year || '').trim().toLowerCase() === newYear.toLowerCase()
+        );
+
+        if (duplicate) {
+          return {
+            error: 'duplicate',
+            title: '⚠️ ALREADY IN YOUR LIST',
+            message: `${newTitle.toUpperCase()}${newYear ? ` (${newYear})` : ''} is already added.`
+          };
+        }
+      }
+
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
 
@@ -93,8 +152,10 @@ export const useMovieStore = create((set, get) => ({
         const movieRef = doc(db, 'users', uid, 'movies', id);
         await updateDoc(movieRef, updatedFields);
       }
+      return { success: true };
     } catch (error) {
       console.error("Error updating movie:", error);
+      return { error: 'system', message: error.message };
     }
   },
 

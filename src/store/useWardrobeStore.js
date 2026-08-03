@@ -8,9 +8,17 @@ export const useWardrobeStore = create((set, get) => ({
   items: [],
   outfits: [],
   loading: false,
+  lastFetched: null,
 
-  fetchWardrobe: async () => {
-    set({ loading: true });
+  fetchWardrobe: async (force = false) => {
+    const now = Date.now();
+    const { items, lastFetched } = get();
+
+    if (!force && items.length > 0 && lastFetched && (now - lastFetched < 5 * 60 * 1000)) {
+      return;
+    }
+
+    set({ loading: items.length === 0 });
     try {
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
@@ -18,10 +26,12 @@ export const useWardrobeStore = create((set, get) => ({
       // 1. Hydrate user-scoped offline cache
       const cachedItems = getLocalUserBackup('wardrobe_items', uid, []);
       const cachedOutfits = getLocalUserBackup('wardrobe_outfits', uid, []);
-      set({ items: cachedItems, outfits: cachedOutfits });
+      if (items.length === 0) {
+        set({ items: cachedItems, outfits: cachedOutfits });
+      }
 
       if (!user) {
-        set({ loading: false });
+        set({ loading: false, lastFetched: now });
         return;
       }
 
@@ -40,7 +50,7 @@ export const useWardrobeStore = create((set, get) => ({
         ...d.data()
       }));
 
-      set({ items: itemsData, outfits: outfitsData, loading: false });
+      set({ items: itemsData, outfits: outfitsData, loading: false, lastFetched: now });
       saveLocalUserBackup('wardrobe_items', uid, itemsData);
       saveLocalUserBackup('wardrobe_outfits', uid, outfitsData);
     } catch (error) {
@@ -51,12 +61,29 @@ export const useWardrobeStore = create((set, get) => ({
 
   addItem: async (itemData) => {
     try {
+      const cleanName = (itemData.name || '').trim();
+      const cleanType = (itemData.type || 'Tops').trim();
+
+      // Duplicate Check key: item name (case-insensitive, trimmed) + type/category
+      const existing = get().items.find(i =>
+        (i.name || '').trim().toLowerCase() === cleanName.toLowerCase() &&
+        (i.type || '').trim().toLowerCase() === cleanType.toLowerCase()
+      );
+
+      if (existing) {
+        return {
+          error: 'duplicate',
+          title: '⚠️ ITEM ALREADY EXISTS',
+          message: `"${cleanName}" (${cleanType}) is already in your wardrobe.`
+        };
+      }
+
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
 
       const newItem = {
-        name: itemData.name || 'Unnamed Item',
-        type: itemData.type || 'Tops',
+        name: cleanName || 'Unnamed Item',
+        type: cleanType,
         season: itemData.season || 'All Seasons',
         color: itemData.color || '#2563EB',
         imageUrl: itemData.imageUrl || '',
@@ -80,14 +107,38 @@ export const useWardrobeStore = create((set, get) => ({
       const updated = [savedItem, ...get().items];
       set({ items: updated });
       saveLocalUserBackup('wardrobe_items', uid, updated);
-      return savedItem;
+      return { success: true, item: savedItem };
     } catch (error) {
       console.error('Error adding wardrobe item:', error);
+      return { error: 'system', message: error.message };
     }
   },
 
   updateItem: async (id, updatedFields) => {
     try {
+      const existingItem = get().items.find(i => i.id === id);
+      if (!existingItem) return { error: 'not_found' };
+
+      const newName = updatedFields.name !== undefined ? (updatedFields.name || '').trim() : (existingItem.name || '').trim();
+      const newType = updatedFields.type !== undefined ? (updatedFields.type || '').trim() : (existingItem.type || '').trim();
+
+      // Duplicate Check: if name or type changed/updated, check against OTHER items
+      if (updatedFields.name !== undefined || updatedFields.type !== undefined) {
+        const duplicate = get().items.find(i =>
+          i.id !== id &&
+          (i.name || '').trim().toLowerCase() === newName.toLowerCase() &&
+          (i.type || '').trim().toLowerCase() === newType.toLowerCase()
+        );
+
+        if (duplicate) {
+          return {
+            error: 'duplicate',
+            title: '⚠️ ITEM ALREADY EXISTS',
+            message: `"${newName}" (${newType}) is already in your wardrobe.`
+          };
+        }
+      }
+
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
 
@@ -101,8 +152,10 @@ export const useWardrobeStore = create((set, get) => ({
         const itemRef = doc(db, 'users', uid, 'wardrobe_items', id);
         await updateDoc(itemRef, updatedFields);
       }
+      return { success: true };
     } catch (error) {
       console.error('Error updating wardrobe item:', error);
+      return { error: 'system', message: error.message };
     }
   },
 

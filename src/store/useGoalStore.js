@@ -10,9 +10,17 @@ export const useGoalStore = create((set, get) => ({
   goals: [],
   categories: DEFAULT_CATEGORIES,
   loading: false,
+  lastFetched: null,
 
-  fetchGoals: async () => {
-    set({ loading: true });
+  fetchGoals: async (force = false) => {
+    const now = Date.now();
+    const { goals, lastFetched } = get();
+
+    if (!force && goals.length > 0 && lastFetched && (now - lastFetched < 5 * 60 * 1000)) {
+      return;
+    }
+
+    set({ loading: goals.length === 0 });
     try {
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
@@ -20,10 +28,12 @@ export const useGoalStore = create((set, get) => ({
       // 1. Hydrate user-scoped offline cache
       const cachedGoals = getLocalUserBackup('goals', uid, []);
       const cachedCategories = getLocalUserBackup('goal_categories', uid, DEFAULT_CATEGORIES);
-      set({ goals: cachedGoals, categories: cachedCategories });
+      if (goals.length === 0) {
+        set({ goals: cachedGoals, categories: cachedCategories });
+      }
 
       if (!user) {
-        set({ loading: false });
+        set({ loading: false, lastFetched: now });
         return;
       }
 
@@ -35,7 +45,7 @@ export const useGoalStore = create((set, get) => ({
         ...d.data()
       })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-      set({ goals: goalsData, loading: false });
+      set({ goals: goalsData, loading: false, lastFetched: now });
       saveLocalUserBackup('goals', uid, goalsData);
     } catch (error) {
       console.error('Error fetching goals from Firestore:', error);
@@ -56,8 +66,55 @@ export const useGoalStore = create((set, get) => ({
     saveLocalUserBackup('goal_categories', uid, updatedCategories);
   },
 
+  deleteCategory: (categoryName) => {
+    if (!categoryName) return;
+    const cleanCat = categoryName.trim();
+
+    // Check if category still has goals
+    const goalsInCat = get().goals.filter(g =>
+      (g.category || '').trim().toLowerCase() === cleanCat.toLowerCase()
+    );
+
+    if (goalsInCat.length > 0) {
+      return {
+        error: 'has_goals',
+        title: '⚠️ CANNOT DELETE CATEGORY',
+        message: `Move or delete all goals in '${cleanCat.toUpperCase()}' before removing this category.`
+      };
+    }
+
+    const user = useAuthStore.getState().user;
+    const uid = user ? user.uid : 'guest';
+
+    const updatedCategories = get().categories.filter(c =>
+      c.trim().toLowerCase() !== cleanCat.toLowerCase()
+    );
+
+    set({ categories: updatedCategories });
+    saveLocalUserBackup('goal_categories', uid, updatedCategories);
+
+    return { success: true };
+  },
+
   addGoal: async (goalData) => {
     try {
+      const cleanTitle = (goalData.title || '').trim();
+      const category = (goalData.category || 'Short Term').trim();
+
+      // Duplicate Check key: goal title (case-insensitive, trimmed) WITHIN the same category
+      const existing = get().goals.find(g =>
+        (g.title || '').trim().toLowerCase() === cleanTitle.toLowerCase() &&
+        (g.category || '').trim().toLowerCase() === category.toLowerCase()
+      );
+
+      if (existing) {
+        return {
+          error: 'duplicate',
+          title: '⚠️ GOAL ALREADY EXISTS IN THIS CATEGORY',
+          message: `"${cleanTitle}" is already added under ${category}.`
+        };
+      }
+
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
 
@@ -65,13 +122,12 @@ export const useGoalStore = create((set, get) => ({
         typeof m === 'string' ? { id: `m_${idx}_${Date.now()}`, title: m, completed: false } : m
       );
 
-      const category = goalData.category || 'Short Term';
       if (!get().categories.includes(category)) {
         get().addCategory(category);
       }
 
       const newGoal = {
-        title: goalData.title || 'Untitled Goal',
+        title: cleanTitle || 'Untitled Goal',
         description: goalData.description || '',
         category: category,
         targetDate: goalData.targetDate || '',
@@ -95,14 +151,38 @@ export const useGoalStore = create((set, get) => ({
       const updated = [savedGoal, ...get().goals];
       set({ goals: updated });
       saveLocalUserBackup('goals', uid, updated);
-      return savedGoal;
+      return { success: true, goal: savedGoal };
     } catch (error) {
       console.error('Error adding goal:', error);
+      return { error: 'system', message: error.message };
     }
   },
 
   updateGoal: async (id, updatedFields) => {
     try {
+      const existingGoal = get().goals.find(g => g.id === id);
+      if (!existingGoal) return { error: 'not_found' };
+
+      const newTitle = updatedFields.title !== undefined ? (updatedFields.title || '').trim() : (existingGoal.title || '').trim();
+      const newCat = updatedFields.category !== undefined ? (updatedFields.category || '').trim() : (existingGoal.category || '').trim();
+
+      // Duplicate Check: if title or category changed/updated, check against OTHER goals in target category
+      if (updatedFields.title !== undefined || updatedFields.category !== undefined) {
+        const duplicate = get().goals.find(g =>
+          g.id !== id &&
+          (g.title || '').trim().toLowerCase() === newTitle.toLowerCase() &&
+          (g.category || '').trim().toLowerCase() === newCat.toLowerCase()
+        );
+
+        if (duplicate) {
+          return {
+            error: 'duplicate',
+            title: '⚠️ GOAL ALREADY EXISTS IN THIS CATEGORY',
+            message: `"${newTitle}" is already added under ${newCat}.`
+          };
+        }
+      }
+
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
 
@@ -116,8 +196,10 @@ export const useGoalStore = create((set, get) => ({
         const goalRef = doc(db, 'users', uid, 'goals', id);
         await updateDoc(goalRef, updatedFields);
       }
+      return { success: true };
     } catch (error) {
       console.error('Error updating goal:', error);
+      return { error: 'system', message: error.message };
     }
   },
 

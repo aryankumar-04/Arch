@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuthStore } from './useAuthStore';
 import { getLocalUserBackup, saveLocalUserBackup } from '../utils/userStorage';
@@ -7,33 +7,41 @@ import { getLocalUserBackup, saveLocalUserBackup } from '../utils/userStorage';
 export const useTaskStore = create((set, get) => ({
   tasks: [],
   loading: false,
+  unsubscribe: null,
 
   fetchTasks: async () => {
-    set({ loading: true });
+    const user = useAuthStore.getState().user;
+    const uid = user ? user.uid : 'guest';
+
+    // 1. Instantly hydrate from user-scoped offline cache
+    const cached = getLocalUserBackup('tasks', uid, []);
+    set({ tasks: cached, loading: cached.length === 0 });
+
+    if (!user || uid === 'guest' || uid === 'guest_user') {
+      set({ loading: false });
+      return;
+    }
+
+    if (get().unsubscribe) {
+      get().unsubscribe();
+    }
+
     try {
-      const user = useAuthStore.getState().user;
-      const uid = user ? user.uid : 'guest';
-
-      // 1. Instantly hydrate from user-scoped offline cache
-      const cached = getLocalUserBackup('tasks', uid, []);
-      set({ tasks: cached });
-
-      if (!user || uid === 'guest' || uid === 'guest_user') {
-        set({ loading: false });
-        return;
-      }
-
-      // 2. Fetch primary truth from Firestore (user-scoped subcollection)
       const colRef = collection(db, 'users', uid, 'tasks');
-      const querySnapshot = await getDocs(colRef);
+      const unsub = onSnapshot(colRef, (snapshot) => {
+        const tasksData = snapshot.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-      const tasksData = querySnapshot.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        set({ tasks: tasksData, loading: false });
+        saveLocalUserBackup('tasks', uid, tasksData);
+      }, (error) => {
+        console.error("Firestore onSnapshot tasks error:", error);
+        set({ loading: false });
+      });
 
-      set({ tasks: tasksData, loading: false });
-      saveLocalUserBackup('tasks', uid, tasksData);
+      set({ unsubscribe: unsub });
     } catch (error) {
       console.error("Firestore fetchTasks error:", error);
       set({ loading: false });
@@ -52,20 +60,38 @@ export const useTaskStore = create((set, get) => ({
         createdAt: new Date().toISOString()
       };
 
-      let savedTask = { id: `local_${Date.now()}`, ...newTask };
-
-      if (user && uid !== 'guest' && uid !== 'guest_user') {
-        try {
-          const docRef = await addDoc(collection(db, 'users', uid, 'tasks'), newTask);
-          savedTask = { id: docRef.id, ...newTask };
-        } catch (fbErr) {
-          console.error("Firestore write failed:", fbErr);
-        }
+      // Unauthenticated / Guest fallback
+      if (!user || uid === 'guest' || uid === 'guest_user') {
+        const localId = `local_${Date.now()}`;
+        const savedTask = { id: localId, ...newTask };
+        const current = get().tasks.filter(t => t.id !== localId);
+        const updated = [savedTask, ...current];
+        set({ tasks: updated });
+        saveLocalUserBackup('tasks', uid, updated);
+        return savedTask;
       }
 
-      const updated = [savedTask, ...get().tasks];
-      set({ tasks: updated });
-      saveLocalUserBackup('tasks', uid, updated);
+      // 1. Immediate optimistic UI addition with temp ID
+      const tempId = `local_${Date.now()}`;
+      const tempTask = { id: tempId, ...newTask };
+      const currentTasks = get().tasks.filter(t => t.id !== tempId);
+      set({ tasks: [tempTask, ...currentTasks] });
+
+      // 2. Perform Firestore write
+      let savedTask = tempTask;
+      try {
+        const docRef = await addDoc(collection(db, 'users', uid, 'tasks'), newTask);
+        savedTask = { id: docRef.id, ...newTask };
+      } catch (fbErr) {
+        console.error("Firestore write failed:", fbErr);
+      }
+
+      // 3. Reconcile state: filter out tempId AND savedTask.id, then insert single clean instance
+      const latestTasks = get().tasks.filter(t => t.id !== tempId && t.id !== savedTask.id);
+      const reconciled = [savedTask, ...latestTasks].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+      set({ tasks: reconciled });
+      saveLocalUserBackup('tasks', uid, reconciled);
       return savedTask;
     } catch (error) {
       console.error("Error adding task:", error);
@@ -80,9 +106,18 @@ export const useTaskStore = create((set, get) => ({
       const task = get().tasks.find(t => t.id === id);
       if (!task) return;
 
-      const newStatus = task.status === 'completed' ? 'todo' : 'completed';
+      const isCompleting = task.status !== 'completed';
+      const newStatus = isCompleting ? 'completed' : 'todo';
+      const newCompletedAt = isCompleting ? new Date().toISOString() : null;
+
+      const updatedTask = {
+        ...task,
+        status: newStatus,
+        completedAt: newCompletedAt
+      };
+
       const updated = get().tasks.map(t =>
-        t.id === id ? { ...t, status: newStatus } : t
+        t.id === id ? updatedTask : t
       );
 
       set({ tasks: updated });
@@ -90,7 +125,10 @@ export const useTaskStore = create((set, get) => ({
 
       if (user && uid !== 'guest' && uid !== 'guest_user' && !id.startsWith('local_')) {
         try {
-          await updateDoc(doc(db, 'users', uid, 'tasks', id), { status: newStatus });
+          await updateDoc(doc(db, 'users', uid, 'tasks', id), {
+            status: newStatus,
+            completedAt: newCompletedAt
+          });
         } catch (fbErr) {
           console.error("Firestore update failed:", fbErr);
         }

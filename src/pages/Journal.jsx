@@ -3,11 +3,35 @@ import { useJournalStore } from '../store';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
+import Skeleton from '../components/common/Skeleton';
 import { PlusIcon, CalendarIcon } from '../components/common/Icons';
+
+export const getTotalSleepHours = (entry) => {
+  if (!entry) return 0;
+
+  // 1. Night Sleep Duration
+  let nightHours = 0;
+  if (typeof entry.sleepCycle?.duration === 'number') {
+    nightHours = entry.sleepCycle.duration;
+  } else if (entry.sleepHours) {
+    nightHours = parseFloat(entry.sleepHours) || 0;
+  }
+
+  // 2. Evening Nap Duration
+  let napHours = 0;
+  if (typeof entry.eveningNap?.duration === 'number') {
+    napHours = entry.eveningNap.duration;
+  } else if (entry.napHours) {
+    napHours = parseFloat(entry.napHours) || 0;
+  }
+
+  return nightHours + napHours;
+};
 
 const Journal = () => {
   const { entries, loading, fetchEntries, addEntry, updateEntry, deleteEntry } = useJournalStore();
   const [selectedId, setSelectedId] = useState(null);
+  const [entryLimit, setEntryLimit] = useState(20);
 
   // Custom date picker modal
   const [isPastDateModalOpen, setIsPastDateModalOpen] = useState(false);
@@ -92,10 +116,52 @@ const Journal = () => {
       hours = (diffMins / 60).toFixed(1);
     }
 
+    const durationNum = parseFloat(hours) || 0;
+    const sleepCycle = {
+      bedtime: sleepTimeVal,
+      wakeTime: wakeTimeVal,
+      duration: durationNum,
+      quality: activeEntry.sleepQuality || 'Restful'
+    };
+
     updateEntry(activeEntry.id, {
       sleepTime: sleepTimeVal,
       wakeTime: wakeTimeVal,
-      sleepHours: hours
+      sleepHours: hours,
+      sleepCycle
+    });
+  };
+
+  // Nap duration calculator
+  const handleNapTimeChange = (napStartVal, napEndVal) => {
+    if (!activeEntry) return;
+    let hours = '0.0';
+
+    if (napStartVal && napEndVal) {
+      const [sH, sM] = napStartVal.split(':').map(Number);
+      const [wH, wM] = napEndVal.split(':').map(Number);
+
+      let start = sH * 60 + sM;
+      let end = wH * 60 + wM;
+      if (end <= start) end += 24 * 60;
+
+      const diffMins = end - start;
+      hours = (diffMins / 60).toFixed(1);
+    }
+
+    const durationNum = parseFloat(hours) || 0;
+    const eveningNap = {
+      napStart: napStartVal || '',
+      napEnd: napEndVal || '',
+      duration: durationNum,
+      quality: activeEntry.napQuality || activeEntry.eveningNap?.quality || 'Restful'
+    };
+
+    updateEntry(activeEntry.id, {
+      napStartTime: napStartVal,
+      napEndTime: napEndVal,
+      napHours: hours,
+      eveningNap
     });
   };
 
@@ -127,36 +193,49 @@ const Journal = () => {
             </button>
           </div>
           {loading ? (
-            <p className="text-muted" style={{ fontSize: '0.8rem' }}>Loading...</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px' }}>
+              <Skeleton type="text" count={4} height="48px" />
+            </div>
           ) : entries.length === 0 ? (
             <p className="text-muted" style={{ fontSize: '0.8rem', padding: '16px 0' }}>No entries yet</p>
           ) : (
-            entries.map(entry => (
-              <div
-                key={entry.id}
-                onClick={() => setSelectedId(entry.id)}
-                style={{
-                  padding: '12px',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  marginBottom: '8px',
-                  background: activeEntry && activeEntry.id === entry.id ? 'var(--yellow)' : 'var(--bg)',
-                  border: 'var(--bw) solid var(--border)',
-                  boxShadow: activeEntry && activeEntry.id === entry.id ? '3px 3px 0 var(--border)' : 'none',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <div className="flex flex-between align-center">
-                  <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>{entry.date}</div>
-                  {entry.date === new Date().toISOString().split('T')[0] && (
-                    <span className="badge badge-green" style={{ fontSize: '0.6rem' }}>TODAY</span>
-                  )}
+            <>
+              {entries.slice(0, entryLimit).map(entry => (
+                <div
+                  key={entry.id}
+                  onClick={() => setSelectedId(entry.id)}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    marginBottom: '8px',
+                    background: activeEntry && activeEntry.id === entry.id ? 'var(--yellow)' : 'var(--bg)',
+                    border: 'var(--bw) solid var(--border)',
+                    boxShadow: activeEntry && activeEntry.id === entry.id ? '3px 3px 0 var(--border)' : 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div className="flex flex-between align-center">
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>{entry.date}</div>
+                    {entry.date === new Date().toISOString().split('T')[0] && (
+                      <span className="badge badge-green" style={{ fontSize: '0.6rem' }}>TODAY</span>
+                    )}
+                  </div>
+                  <div className="text-muted truncate" style={{ fontSize: '0.75rem', marginTop: '4px', fontWeight: 600 }}>
+                    {entry.mood || '🙂'} 😴 {getTotalSleepHours(entry).toFixed(1)}h | 💧 {entry.waterGlasses || 0}g | {entry.event || 'No highlight'}
+                  </div>
                 </div>
-                <div className="text-muted truncate" style={{ fontSize: '0.75rem', marginTop: '4px', fontWeight: 600 }}>
-                  {entry.mood || '🙂'} 😴 {entry.sleepHours || '8'}h | 💧 {entry.waterGlasses || 0}g | {entry.event || 'No highlight'}
-                </div>
-              </div>
-            ))
+              ))}
+              {entries.length > entryLimit && (
+                <button
+                  className="btn btn-sm btn-ghost width-full mt-8"
+                  onClick={() => setEntryLimit(prev => prev + 20)}
+                  style={{ width: '100%', fontSize: '0.75rem' }}
+                >
+                  + {entries.length - entryLimit} MORE ENTRIES
+                </button>
+              )}
+            </>
           )}
         </Card>
 
@@ -246,7 +325,85 @@ const Journal = () => {
                     <select
                       className="form-select"
                       value={activeEntry.sleepQuality || 'Restful'}
-                      onChange={(e) => handleChange('sleepQuality', e.target.value)}
+                      onChange={(e) => {
+                        const newQuality = e.target.value;
+                        const sleepCycle = {
+                          bedtime: activeEntry.sleepTime || '23:00',
+                          wakeTime: activeEntry.wakeTime || '07:00',
+                          duration: parseFloat(activeEntry.sleepHours || 8.0),
+                          quality: newQuality
+                        };
+                        updateEntry(activeEntry.id, {
+                          sleepQuality: newQuality,
+                          sleepCycle
+                        });
+                      }}
+                    >
+                      <option value="Restful">Restful</option>
+                      <option value="Deep">Deep</option>
+                      <option value="Interrupted">Interrupted</option>
+                      <option value="Light">Light</option>
+                      <option value="Poor">Poor</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* TRACKER 1.5: Evening Nap Tracker */}
+              <div className="mb-20" style={{ background: 'var(--bg)', padding: '16px', border: 'var(--bw) solid var(--border)' }}>
+                <div className="card-title mb-12 flex align-center gap-8">
+                  <span>🌙</span> EVENING NAP TRACKER
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>NAP START TIME</label>
+                    <input
+                      type="time"
+                      className="form-input"
+                      value={activeEntry.napStartTime || activeEntry.eveningNap?.napStart || ''}
+                      onChange={(e) => handleNapTimeChange(e.target.value, activeEntry.napEndTime || activeEntry.eveningNap?.napEnd || '')}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>NAP END TIME</label>
+                    <input
+                      type="time"
+                      className="form-input"
+                      value={activeEntry.napEndTime || activeEntry.eveningNap?.napEnd || ''}
+                      onChange={(e) => handleNapTimeChange(activeEntry.napStartTime || activeEntry.eveningNap?.napStart || '', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>NAP DURATION</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={`${activeEntry.napHours || activeEntry.eveningNap?.duration || '0.0'} HRS`}
+                      readOnly
+                      style={{ fontWeight: 900, background: 'var(--bg2)' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>NAP QUALITY</label>
+                    <select
+                      className="form-select"
+                      value={activeEntry.napQuality || activeEntry.eveningNap?.quality || 'Restful'}
+                      onChange={(e) => {
+                        const newQuality = e.target.value;
+                        const eveningNap = {
+                          napStart: activeEntry.napStartTime || activeEntry.eveningNap?.napStart || '',
+                          napEnd: activeEntry.napEndTime || activeEntry.eveningNap?.napEnd || '',
+                          duration: parseFloat(activeEntry.napHours || activeEntry.eveningNap?.duration || 0),
+                          quality: newQuality
+                        };
+                        updateEntry(activeEntry.id, {
+                          napQuality: newQuality,
+                          eveningNap
+                        });
+                      }}
                     >
                       <option value="Restful">Restful</option>
                       <option value="Deep">Deep</option>

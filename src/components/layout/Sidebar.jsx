@@ -53,7 +53,12 @@ const Sidebar = memo(({ isOpen, onClose }) => {
             <NavLink 
               to={item.path} 
               key={item.name}
-              onClick={onClose}
+              onClick={() => {
+                onClose();
+                if (item.path === '/calendar') {
+                  window.dispatchEvent(new CustomEvent('reset-calendar'));
+                }
+              }}
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             >
               <span>{item.icon}</span>

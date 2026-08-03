@@ -3,22 +3,30 @@ import { useExpenseStore } from '../store';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
 import StatCard from '../components/common/StatCard';
+import Skeleton from '../components/common/Skeleton';
 import { TrashIcon, PlusIcon } from '../components/common/Icons';
 
 const Expenses = () => {
   const { expenses, loading, fetchExpenses, addExpense, deleteExpense } = useExpenseStore();
   const [newExp, setNewExp] = useState({ title: '', amount: '', category: 'Food' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [txLimit, setTxLimit] = useState(30);
   const categories = ['Food', 'Transport', 'College', 'Entertainment', 'Other'];
 
   useEffect(() => {
     fetchExpenses();
   }, [fetchExpenses]);
 
-  const handleAdd = (e) => {
+  const handleAdd = async (e) => {
     e.preventDefault();
     if (newExp.title && newExp.amount) {
-      addExpense(newExp);
-      setNewExp({ title: '', amount: '', category: 'Food' });
+      setIsSubmitting(true);
+      try {
+        await addExpense(newExp);
+        setNewExp({ title: '', amount: '', category: 'Food' });
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
   
@@ -63,7 +71,7 @@ const Expenses = () => {
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
-          <Button type="submit" variant="primary" icon={<PlusIcon />}>
+          <Button type="submit" variant="primary" icon={<PlusIcon />} loading={isSubmitting} loadingText="Logging...">
             Log Expense
           </Button>
         </form>
@@ -71,28 +79,39 @@ const Expenses = () => {
       
       <div className="flex" style={{ flexDirection: 'column', gap: '12px' }}>
         {loading ? (
-          <div className="empty-state">Loading expenses...</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Skeleton type="text" count={5} height="60px" />
+          </div>
         ) : expenses.length === 0 ? (
           <div className="empty-state">No expenses logged yet.</div>
         ) : (
-          expenses.map(e => (
-            <Card key={e.id} className="flex flex-between flex-center">
-              <div>
-                <h3 style={{ margin: 0, fontWeight: 900 }}>{e.title}</h3>
-                <div className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 700, marginTop: '4px' }}>
-                  {e.category}
+          <>
+            {expenses.slice(0, txLimit).map(e => (
+              <Card key={e.id} className="flex flex-between flex-center">
+                <div>
+                  <h3 style={{ margin: 0, fontWeight: 900 }}>{e.title}</h3>
+                  <div className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 700, marginTop: '4px' }}>
+                    {e.category}
+                  </div>
                 </div>
-              </div>
-              <div className="flex flex-center gap-16">
-                <div style={{ fontWeight: 900, fontSize: '1.2rem', color: 'var(--red)' }}>
-                  -₹{e.amount}
+                <div className="flex flex-center gap-16">
+                  <div style={{ fontWeight: 900, fontSize: '1.2rem', color: 'var(--red)' }}>
+                    -₹{e.amount}
+                  </div>
+                  <button className="btn-icon" onClick={() => deleteExpense(e.id)}>
+                    <TrashIcon size={14} />
+                  </button>
                 </div>
-                <button className="btn-icon" onClick={() => deleteExpense(e.id)}>
-                  <TrashIcon size={14} />
-                </button>
+              </Card>
+            ))}
+            {expenses.length > txLimit && (
+              <div className="flex flex-center mt-12 mb-24">
+                <Button variant="yellow" onClick={() => setTxLimit(prev => prev + 30)}>
+                  LOAD MORE EXPENSES ({expenses.length - txLimit} REMAINING)
+                </Button>
               </div>
-            </Card>
-          ))
+            )}
+          </>
         )}
       </div>
     </div>

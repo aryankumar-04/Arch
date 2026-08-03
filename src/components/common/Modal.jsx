@@ -1,7 +1,7 @@
 import React from 'react';
 import { CloseIcon } from './Icons';
 
-const Modal = ({ isOpen, onClose, title, children }) => {
+const Modal = ({ isOpen, onClose, title, children, bodyRef }) => {
   if (!isOpen) return null;
 
   return (
@@ -13,7 +13,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
             <CloseIcon size={16} />
           </button>
         </div>
-        <div className="modal-body">
+        <div className="modal-body" ref={bodyRef}>
           {children}
         </div>
       </div>

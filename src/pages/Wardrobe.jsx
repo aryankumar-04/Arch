@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useWardrobeStore } from '../store';
 import StatCard from '../components/common/StatCard';
 import Modal from '../components/common/Modal';
-import { SearchIcon, PlusIcon, TrashIcon } from '../components/common/Icons';
+import Button from '../components/common/Button';
+import Skeleton from '../components/common/Skeleton';
+import DuplicateErrorBanner from '../components/common/DuplicateErrorBanner';
+import { SearchIcon, PlusIcon, TrashIcon, EditIcon } from '../components/common/Icons';
 import { useDebounce } from '../utils/useDebounce';
 
 const Wardrobe = () => {
   const {
-    items, outfits, fetchWardrobe, addItem, deleteItem,
+    items, outfits, loading, fetchWardrobe, addItem, updateItem, deleteItem,
     incrementWear, toggleFavorite, addOutfit, wearOutfit, deleteOutfit
   } = useWardrobeStore();
 
@@ -20,6 +23,17 @@ const Wardrobe = () => {
   // Modals state
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [isOutfitModalOpen, setIsOutfitModalOpen] = useState(false);
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [duplicateError, setDuplicateError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pageLimit, setPageLimit] = useState(24);
+  const modalBodyRef = useRef(null);
+
+  useEffect(() => {
+    if (duplicateError && modalBodyRef.current) {
+      modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [duplicateError]);
 
   // Form states
   const [itemForm, setItemForm] = useState({
@@ -49,13 +63,9 @@ const Wardrobe = () => {
     fetchWardrobe();
   }, [fetchWardrobe]);
 
-  // Handle Item Submit
-  const handleItemSubmit = async (e) => {
-    e.preventDefault();
-    if (!itemForm.name.trim()) return;
-
-    await addItem(itemForm);
-    setIsItemModalOpen(false);
+  const handleOpenAddItemModal = () => {
+    setEditingItemId(null);
+    setDuplicateError(null);
     setItemForm({
       name: '',
       type: 'Tops',
@@ -66,26 +76,79 @@ const Wardrobe = () => {
       wearCount: 0,
       notes: ''
     });
+    setIsItemModalOpen(true);
+  };
+
+  const handleOpenEditItemModal = (item) => {
+    setEditingItemId(item.id);
+    setDuplicateError(null);
+    setItemForm({
+      name: item.name || '',
+      type: item.type || 'Tops',
+      season: item.season || 'All Seasons',
+      color: item.color || '#2563EB',
+      imageUrl: item.imageUrl || '',
+      isFavorite: Boolean(item.isFavorite),
+      wearCount: Number(item.wearCount || 0),
+      notes: item.notes || ''
+    });
+    setIsItemModalOpen(true);
+  };
+
+  // Handle Item Submit
+  const handleItemSubmit = async (e) => {
+    e.preventDefault();
+    if (!itemForm.name.trim()) return;
+    setDuplicateError(null);
+    setIsSubmitting(true);
+
+    try {
+      let res;
+      if (editingItemId) {
+        res = await updateItem(editingItemId, itemForm);
+      } else {
+        res = await addItem(itemForm);
+      }
+
+      if (res && res.error === 'duplicate') {
+        setDuplicateError({
+          title: res.title || '⚠️ ITEM ALREADY EXISTS',
+          message: res.message,
+          _t: Date.now()
+        });
+        return;
+      }
+
+      setIsItemModalOpen(false);
+      setEditingItemId(null);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Handle Outfit Submit
   const handleOutfitSubmit = async (e) => {
     e.preventDefault();
     if (!outfitForm.name.trim()) return;
+    setIsSubmitting(true);
 
-    await addOutfit(outfitForm);
-    setIsOutfitModalOpen(false);
-    setOutfitForm({
-      name: '',
-      occasion: 'Casual',
-      season: 'All Seasons',
-      topId: '',
-      bottomId: '',
-      shoesId: '',
-      outerwearId: '',
-      accessoryId: '',
-      notes: ''
-    });
+    try {
+      await addOutfit(outfitForm);
+      setIsOutfitModalOpen(false);
+      setOutfitForm({
+        name: '',
+        occasion: 'Casual',
+        season: 'All Seasons',
+        topId: '',
+        bottomId: '',
+        shoesId: '',
+        outerwearId: '',
+        accessoryId: '',
+        notes: ''
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Metrics
@@ -136,7 +199,7 @@ const Wardrobe = () => {
       <div className="page-header">
         <h1>👔 WARDROBE</h1>
         <div className="flex gap-12">
-          <button className="btn btn-primary" onClick={() => setIsItemModalOpen(true)}>
+          <button className="btn btn-primary" onClick={handleOpenAddItemModal}>
             <PlusIcon size={16} /> ADD ITEM
           </button>
           <button className="btn btn-ghost" onClick={() => setIsOutfitModalOpen(true)}>
@@ -233,14 +296,25 @@ const Wardrobe = () => {
 
       {/* Main Display: ITEMS Tab */}
       {activeTab === 'ITEMS' && (
-        filteredItems.length === 0 ? (
+        loading ? (
+          <div className="dash-grid">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <Skeleton type="card" height="180px" />
+                <Skeleton type="text" width="70%" height="20px" />
+                <Skeleton type="text" width="40%" height="14px" />
+              </div>
+            ))}
+          </div>
+        ) : filteredItems.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">👔</div>
             <p>NO CLOTHING ITEMS YET</p>
           </div>
         ) : (
-          <div className="dash-grid">
-            {filteredItems.map(item => (
+          <>
+            <div className="dash-grid">
+              {filteredItems.slice(0, pageLimit).map(item => (
               <div key={item.id} className="card card-hover" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Image / Thumbnail Container */}
                 <div
@@ -320,18 +394,38 @@ const Wardrobe = () => {
                   >
                     +1 WEAR
                   </button>
-                  <button
-                    className="btn-icon"
-                    style={{ color: 'var(--red)' }}
-                    onClick={() => deleteItem(item.id)}
-                    title="Delete item"
-                  >
-                    <TrashIcon size={16} />
-                  </button>
+                  <div className="flex align-center gap-8">
+                    <button
+                      className="btn-icon"
+                      onClick={() => handleOpenEditItemModal(item)}
+                      title="Edit item"
+                    >
+                      <EditIcon size={16} />
+                    </button>
+                    <button
+                      className="btn-icon"
+                      style={{ color: 'var(--red)' }}
+                      onClick={() => deleteItem(item.id)}
+                      title="Delete item"
+                    >
+                      <TrashIcon size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
+          {filteredItems.length > pageLimit && (
+            <div className="flex flex-center mt-24 mb-24">
+              <Button
+                variant="yellow"
+                onClick={() => setPageLimit(prev => prev + 24)}
+              >
+                LOAD MORE ITEMS ({filteredItems.length - pageLimit} REMAINING)
+              </Button>
+            </div>
+          )}
+        </>
         )
       )}
 
@@ -407,15 +501,31 @@ const Wardrobe = () => {
       {/* Floating Action Button */}
       <button
         className="fab-btn"
-        onClick={() => activeTab === 'ITEMS' ? setIsItemModalOpen(true) : setIsOutfitModalOpen(true)}
+        onClick={() => activeTab === 'ITEMS' ? handleOpenAddItemModal() : setIsOutfitModalOpen(true)}
         title={activeTab === 'ITEMS' ? 'Add Item' : 'Create Outfit'}
       >
         <PlusIcon size={24} />
       </button>
 
-      {/* Add Item Modal */}
-      <Modal isOpen={isItemModalOpen} onClose={() => setIsItemModalOpen(false)} title="➕ ADD CLOTHING ITEM">
+      {/* Add / Edit Item Modal */}
+      <Modal
+        isOpen={isItemModalOpen}
+        onClose={() => {
+          setIsItemModalOpen(false);
+          setEditingItemId(null);
+          setDuplicateError(null);
+        }}
+        title={editingItemId ? "✏️ EDIT CLOTHING ITEM" : "➕ ADD CLOTHING ITEM"}
+        bodyRef={modalBodyRef}
+      >
         <form onSubmit={handleItemSubmit}>
+          {duplicateError && (
+            <DuplicateErrorBanner
+              title={duplicateError.title}
+              message={duplicateError.message}
+              onClose={() => setDuplicateError(null)}
+            />
+          )}
           <div className="form-group">
             <label>ITEM NAME</label>
             <input
@@ -487,9 +597,14 @@ const Wardrobe = () => {
             <button type="button" className="btn btn-ghost" onClick={() => setIsItemModalOpen(false)}>
               CANCEL
             </button>
-            <button type="submit" className="btn btn-primary">
+            <Button
+              type="submit"
+              variant="primary"
+              loading={isSubmitting}
+              loadingText="SAVING..."
+            >
               SAVE ITEM
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>
@@ -602,9 +717,14 @@ const Wardrobe = () => {
             <button type="button" className="btn btn-ghost" onClick={() => setIsOutfitModalOpen(false)}>
               CANCEL
             </button>
-            <button type="submit" className="btn btn-primary">
+            <Button
+              type="submit"
+              variant="primary"
+              loading={isSubmitting}
+              loadingText="SAVING..."
+            >
               SAVE OUTFIT
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

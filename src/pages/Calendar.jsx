@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useCalendarStore } from '../store';
 import Button from '../components/common/Button';
 import { PlusIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '../components/common/Icons';
@@ -22,20 +22,33 @@ const getLocalYMD = (dateObj = new Date()) => {
 const Calendar = () => {
   const { events, fetchEvents, addEvent, deleteEvent } = useCalendarStore();
 
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 25)); // Default July 2026
-  const [selectedDateStr, setSelectedDateStr] = useState('2026-07-25');
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState(() => getLocalYMD(new Date()));
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form state
   const [title, setTitle] = useState('');
-  const [eventDate, setEventDate] = useState('2026-07-25');
+  const [eventDate, setEventDate] = useState(() => getLocalYMD(new Date()));
   const [type, setType] = useState('Custom');
   const [color, setColor] = useState('#EF4444');
   const [description, setDescription] = useState('');
 
+  const resetToToday = useCallback(() => {
+    const now = new Date();
+    setCurrentDate(now);
+    setSelectedDateStr(getLocalYMD(now));
+  }, []);
+
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  useEffect(() => {
+    resetToToday();
+    const handleReset = () => resetToToday();
+    window.addEventListener('reset-calendar', handleReset);
+    return () => window.removeEventListener('reset-calendar', handleReset);
+  }, [resetToToday]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -54,9 +67,7 @@ const Calendar = () => {
   };
 
   const handleToday = () => {
-    const now = new Date();
-    setCurrentDate(now);
-    setSelectedDateStr(getLocalYMD(now));
+    resetToToday();
   };
 
   const openNewEventModal = (dateStr = selectedDateStr) => {
@@ -133,7 +144,7 @@ const Calendar = () => {
           <span>🗓️</span> CALENDAR
         </h1>
         <Button variant="primary" icon={<PlusIcon />} onClick={() => openNewEventModal()}>
-          + NEW EVENT
+          NEW EVENT
         </Button>
       </div>
 

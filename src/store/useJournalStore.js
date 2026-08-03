@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuthStore } from './useAuthStore';
 import { getLocalUserBackup, saveLocalUserBackup } from '../utils/userStorage';
@@ -7,30 +7,40 @@ import { getLocalUserBackup, saveLocalUserBackup } from '../utils/userStorage';
 export const useJournalStore = create((set, get) => ({
   entries: [],
   loading: false,
+  unsubscribe: null,
 
   fetchEntries: async () => {
-    set({ loading: true });
+    const user = useAuthStore.getState().user;
+    const uid = user ? user.uid : 'guest';
+
+    const cached = getLocalUserBackup('journal', uid, []);
+    set({ entries: cached, loading: cached.length === 0 });
+
+    if (!user || uid === 'guest' || uid === 'guest_user') {
+      set({ loading: false });
+      return;
+    }
+
+    if (get().unsubscribe) {
+      get().unsubscribe();
+    }
+
     try {
-      const user = useAuthStore.getState().user;
-      const uid = user ? user.uid : 'guest';
-
-      const cached = getLocalUserBackup('journal', uid, []);
-      set({ entries: cached });
-
-      if (!user || uid === 'guest' || uid === 'guest_user') {
-        set({ loading: false });
-        return;
-      }
-
       const colRef = collection(db, 'users', uid, 'journal');
-      const querySnapshot = await getDocs(colRef);
-      const entriesData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })).sort((a, b) => b.date.localeCompare(a.date));
+      const unsub = onSnapshot(colRef, (querySnapshot) => {
+        const entriesData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })).sort((a, b) => b.date.localeCompare(a.date));
 
-      set({ entries: entriesData, loading: false });
-      saveLocalUserBackup('journal', uid, entriesData);
+        set({ entries: entriesData, loading: false });
+        saveLocalUserBackup('journal', uid, entriesData);
+      }, (error) => {
+        console.error("Firestore onSnapshot journal error:", error);
+        set({ loading: false });
+      });
+
+      set({ unsubscribe: unsub });
     } catch (error) {
       console.error("Firestore fetchEntries error:", error);
       set({ loading: false });
@@ -49,6 +59,22 @@ export const useJournalStore = create((set, get) => ({
         wakeTime: '07:00',
         sleepHours: '8.0',
         sleepQuality: 'Restful',
+        sleepCycle: {
+          bedtime: '23:00',
+          wakeTime: '07:00',
+          duration: 8.0,
+          quality: 'Restful'
+        },
+        napStartTime: '',
+        napEndTime: '',
+        napHours: '0.0',
+        napQuality: 'Restful',
+        eveningNap: {
+          napStart: '',
+          napEnd: '',
+          duration: 0,
+          quality: 'Restful'
+        },
         waterGlasses: 4,
         energyLevel: 3,
         productivityLevel: 3,

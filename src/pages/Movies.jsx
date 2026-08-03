@@ -1,21 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMovieStore } from '../store';
 import StatCard from '../components/common/StatCard';
 import Modal from '../components/common/Modal';
-import { SearchIcon, PlusIcon, TrashIcon } from '../components/common/Icons';
+import Button from '../components/common/Button';
+import Skeleton from '../components/common/Skeleton';
+import DuplicateErrorBanner from '../components/common/DuplicateErrorBanner';
+import { SearchIcon, PlusIcon, TrashIcon, EditIcon } from '../components/common/Icons';
 import { fetchMovieFromIMDb, searchMoviesFromIMDb } from '../utils/imdbFetcher';
 import { useDebounce } from '../utils/useDebounce';
 
 const Movies = () => {
-  const { movies, fetchMovies, addMovie, toggleStatus, updateMovie, deleteMovie } = useMovieStore();
+  const { movies, loading, fetchMovies, addMovie, toggleStatus, updateMovie, deleteMovie } = useMovieStore();
 
   const [filter, setFilter] = useState('ALL'); // 'ALL' | 'WATCHLIST' | 'WATCHED'
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 250);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingMovieId, setEditingMovieId] = useState(null);
+  const [duplicateError, setDuplicateError] = useState(null);
   const [isFetchingImdb, setIsFetchingImdb] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pageLimit, setPageLimit] = useState(24);
+  const modalBodyRef = useRef(null);
+
+  useEffect(() => {
+    if (duplicateError && modalBodyRef.current) {
+      modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [duplicateError]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -36,6 +50,8 @@ const Movies = () => {
   }, [fetchMovies]);
 
   const handleOpenModal = () => {
+    setEditingMovieId(null);
+    setDuplicateError(null);
     setFormData({
       title: '',
       year: '',
@@ -47,6 +63,26 @@ const Movies = () => {
       status: 'watchlist',
       poster: '',
       notes: ''
+    });
+    setFetchError('');
+    setSearchResults([]);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (movie) => {
+    setEditingMovieId(movie.id);
+    setDuplicateError(null);
+    setFormData({
+      title: movie.title || '',
+      year: movie.year || '',
+      genre: movie.genre || '',
+      director: movie.director || '',
+      plot: movie.plot || '',
+      imdbRating: movie.imdbRating || '',
+      userRating: movie.userRating || 0,
+      status: movie.status || 'watchlist',
+      poster: movie.poster || '',
+      notes: movie.notes || ''
     });
     setFetchError('');
     setSearchResults([]);
@@ -122,9 +158,31 @@ const Movies = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
+    setDuplicateError(null);
+    setIsSubmitting(true);
 
-    await addMovie(formData);
-    setIsModalOpen(false);
+    try {
+      let res;
+      if (editingMovieId) {
+        res = await updateMovie(editingMovieId, formData);
+      } else {
+        res = await addMovie(formData);
+      }
+
+      if (res && res.error === 'duplicate') {
+        setDuplicateError({
+          title: res.title || '⚠️ ALREADY IN YOUR LIST',
+          message: res.message,
+          _t: Date.now()
+        });
+        return;
+      }
+
+      setIsModalOpen(false);
+      setEditingMovieId(null);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Metrics
@@ -221,14 +279,25 @@ const Movies = () => {
       </div>
 
       {/* Movies Grid or Empty State */}
-      {filteredMovies.length === 0 ? (
+      {loading ? (
+        <div className="dash-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <Skeleton type="card" height="240px" />
+              <Skeleton type="text" width="80%" height="20px" />
+              <Skeleton type="text" width="40%" height="14px" />
+            </div>
+          ))}
+        </div>
+      ) : filteredMovies.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">🎬</div>
           <p>NO MOVIES FOUND</p>
         </div>
       ) : (
-        <div className="dash-grid">
-          {filteredMovies.map(movie => (
+        <>
+          <div className="dash-grid">
+            {filteredMovies.slice(0, pageLimit).map(movie => (
             <div key={movie.id} className="card card-hover" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px' }}>
               {/* Poster Thumbnail */}
               <div
@@ -336,24 +405,44 @@ const Movies = () => {
 
               {/* Bottom Actions */}
               <div className="flex flex-between align-center mt-12" style={{ borderTop: 'var(--bw) solid var(--border)', paddingTop: '12px' }}>
-                <button
-                  className={`btn btn-sm ${movie.status === 'watched' ? 'btn-yellow' : 'btn-ghost'}`}
-                  onClick={() => toggleStatus(movie.id)}
-                >
-                  {movie.status === 'watched' ? '✓ WATCHED' : '+ WATCHLIST'}
-                </button>
-                <button
-                  className="btn-icon"
-                  style={{ color: 'var(--red)' }}
-                  onClick={() => deleteMovie(movie.id)}
-                  title="Delete Movie"
-                >
-                  <TrashIcon size={16} />
-                </button>
+                <div className="flex align-center gap-8">
+                  <button
+                    className={`btn btn-sm ${movie.status === 'watched' ? 'btn-yellow' : 'btn-ghost'}`}
+                    onClick={() => toggleStatus(movie.id)}
+                  >
+                    {movie.status === 'watched' ? '✓ WATCHED' : '+ WATCHLIST'}
+                  </button>
+                  <button
+                    className="btn-icon"
+                    onClick={() => handleOpenEditModal(movie)}
+                    title="Edit Movie"
+                  >
+                    <EditIcon size={16} />
+                  </button>
+                  <button
+                    className="btn-icon"
+                    style={{ color: 'var(--red)' }}
+                    onClick={() => deleteMovie(movie.id)}
+                    title="Delete Movie"
+                  >
+                    <TrashIcon size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
+        {filteredMovies.length > pageLimit && (
+          <div className="flex flex-center mt-24 mb-24">
+            <Button
+              variant="yellow"
+              onClick={() => setPageLimit(prev => prev + 24)}
+            >
+              LOAD MORE MOVIES ({filteredMovies.length - pageLimit} REMAINING)
+            </Button>
+          </div>
+        )}
+        </>
       )}
 
       {/* Floating Add Button */}
@@ -361,9 +450,25 @@ const Movies = () => {
         <PlusIcon size={24} />
       </button>
 
-      {/* Add Movie Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="➕ ADD NEW MOVIE">
+      {/* Add / Edit Movie Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingMovieId(null);
+          setDuplicateError(null);
+        }}
+        title={editingMovieId ? "✏️ EDIT MOVIE" : "➕ ADD NEW MOVIE"}
+        bodyRef={modalBodyRef}
+      >
         <form onSubmit={handleSubmit}>
+          {duplicateError && (
+            <DuplicateErrorBanner
+              title={duplicateError.title}
+              message={duplicateError.message}
+              onClose={() => setDuplicateError(null)}
+            />
+          )}
           {/* Title & Fetch Button */}
           <div className="form-group">
             <label>MOVIE TITLE</label>
@@ -531,9 +636,14 @@ const Movies = () => {
             <button type="button" className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>
               CANCEL
             </button>
-            <button type="submit" className="btn btn-primary">
+            <Button
+              type="submit"
+              variant="primary"
+              loading={isSubmitting}
+              loadingText="SAVING..."
+            >
               SAVE MOVIE
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>
