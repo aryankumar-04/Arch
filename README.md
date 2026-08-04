@@ -50,67 +50,33 @@
 
 ## ✨ Key Features
 
-### ⚡ 1. Command Center (Dashboard)
-- **Live Clock & Greeting**: Real-time ticking clock with time-sensitive greetings (*"Good Evening 👋"*).
-- **Streak Counters**: Visual streak metrics for journal logging, workouts, and completed tasks.
-- **Sleep & Priorities**: Direct synchronization with daily sleep logs, college classes, and top priorities.
-- **Mood Logger**: One-tap emoji mood logger to track daily emotional well-being.
-- **Quick Scratchpad & Motivational Quotes**: Instant note-taking space paired with an inspirational quote generator.
+**⚡ 1. Command Center** — Live clock, greeting, streak counters, mood logger, quick scratchpad, and quotes.
 
-### 📓 2. Daily Journal & Sleep Cycle Tracker
-- **Automatic Load**: Auto-loads today's journal entry with seamless past-date editing.
-- **Sleep Metrics**: Tracks bedtime, wake time, sleep quality, and auto-calculates total sleep hours.
-- **Habits & Reflection**: Water intake counter (8-glass target), energy & productivity scales (1–5), gratitude, and habit checkboxes.
+**📓 2. Journal & Sleep Tracker** — Daily journal, sleep metrics (bedtime/wake/quality), water intake, energy scale, gratitude, habits.
 
-### 📋 3. Task Management & Priority Matrix
-- **Categorized Tasks**: Group tasks by status (*Pending, In Progress, Completed*) and priorities (*Urgent, High, Medium, Low*).
-- **Fast Batch Operations**: Instant creation, inline check-off, filtering, and deletion.
+**📋 3. Task Management** — Tasks by status (Pending/In Progress/Completed) and priority, with fast batch create/edit/delete.
 
-### 🗓️ 4. Interactive Calendar
-- **Event Management**: Create custom events with title, type, date, notes, and custom color indicators (*Red, Purple, Orange, Blue*).
-- **Month Grid & Today Quick Jump**: Smooth grid navigation with month-by-month filtering and instant today jump button.
+**🗓️ 4. Calendar** — Custom events with type, date, notes, color tags; month grid with "Today" jump.
 
-### 🏋️ 5. Gym & Fitness Log
-- **Workout Routine Tracker**: Log exercises, sets, reps, weight (kg/lbs), target muscle groups, and duration.
-- **Fitness History**: Review past workouts, total tonnage lifted, and consistency streaks.
+**🏋️ 5. Gym Log** — Track exercises, sets/reps/weight, muscle groups, workout history, and streaks.
 
-### 💻 6. Coding & Problem Solver Hub
-- **Multi-Platform Logger**: Track LeetCode problems, GitHub commits, Codeforces matches, and HackerRank challenges.
-- **Difficulty Metrics**: Visual counters for Easy, Medium, and Hard problem breakdowns.
+**💻 6. Coding Hub** — Log LeetCode, GitHub, Codeforces, HackerRank activity with difficulty breakdowns.
 
-### 🎓 7. College Academic Hub
-- **Timetable & Attendance**: Track course schedules, class locations, professor info, and target attendance percentages.
-- **Assignment Tracker**: Keep tabs on upcoming project deadlines, midterms, and exam dates.
+**🎓 7. College Hub** — Timetable, attendance %, and assignment/exam deadline tracker.
 
-### 🎬 8. Movies & TV Watchlist (IMDb Integration)
-- **IMDb Auto-Fetch**: Instant IMDb lookup fetching official posters, IMDb ratings (`⭐ 8.8`), release year, directors, and plot summaries.
-- **Fuzzy Search Suggestions**: Candidate matches to easily discover movies even with spelling variations.
-- **User Ratings**: Mark movies as *Watchlist* or *Watched* with interactive 5-star user ratings.
+**🎬 8. Movies Watchlist** — IMDb auto-fetch (poster, rating, year, plot), fuzzy search, 5-star user ratings.
 
-### 👔 9. Wardrobe Studio & Outfit Builder
-- **Clothing Catalog**: Categorize apparel by category (*Tops, Bottoms, Shoes, Outerwear, Accessories*) and season.
-- **Outfit Combination Studio**: Pair garments into stylish outfits for work, casual, or formal occasions.
-- **Wear Count Tracker**: Click `+1 WEAR` to track garment usage and identify your most worn wardrobe items.
+**👔 9. Wardrobe Studio** — Clothing catalog by category/season, outfit builder, wear-count tracker.
 
-### 💰 10. Expenses & Budgeting
-- **Transaction Logs**: Record income and expense entries with categories (*Food, Transport, Bills, Shopping, Entertainment*).
-- **Budget Summaries**: Dynamic calculations of total income, expenses, and net balance.
+**💰 10. Expenses** — Income/expense logs by category with auto-calculated balance.
 
-### 🎯 11. Milestone Goals Hub
-- **Sub-Task Progress**: Break goals down into actionable sub-milestones with automated progress percentage bars.
-- **Categorized Goals**: Organize goals under *Career, Health, Finance, Side Projects, Short Term, and Long Term*.
+**🎯 11. Milestone Goals** — Goals broken into sub-tasks with progress bars, organized by category.
 
-### 📊 12. System Analytics & Insights
-- **Productivity Score**: Dynamic 0–100 score synthesized from tasks, workouts, coding, and journal consistency.
-- **Interactive Visual Charts**: Graphs tracking sleep trends, spending habits, workout consistency, and coding activity over time.
+**📊 12. Analytics** — 0–100 productivity score + charts for sleep, spending, workouts, and coding activity.
 
-### 🔍 13. Global Command Palette
-- **Shortcut (`Ctrl + K`)**: Instant search across all modules, tasks, events, and navigation items.
+**🔍 13. Command Palette** — `Ctrl+K` instant search across all modules.
 
-### ⚙️ 14. Theme Engine & Settings
-- **7 Neo-Brutalist Color Themes**: Paper Soft, Cyber Dark, Cobalt Blue, Cyber Amber, Electric Violet, Emerald Mint, Crimson Red.
-- **Custom Accent Picker**: Native color picker to customize CSS variable accents across the entire application.
-- **Data Portability**: Full workspace JSON export/import and CSV task export.
+**⚙️ 14. Theme Engine** — 7 color themes, custom accent picker, full JSON/CSV data export-import.
 
 ---
 
