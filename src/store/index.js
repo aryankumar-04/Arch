@@ -12,4 +12,4 @@ export { useCodingStore, useLeetCodeStore } from './useCodingStore';
 export { useSettingsStore } from './useSettingsStore';
 export { useSearchStore } from './useSearchStore';
 export { useOnboardingStore } from './useOnboardingStore';
-
+export { useTagStore } from './useTagStore';

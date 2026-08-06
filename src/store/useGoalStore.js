@@ -42,6 +42,7 @@ export const useGoalStore = create((set, get) => ({
       const querySnapshot = await getDocs(colRef);
       const goalsData = querySnapshot.docs.map(d => ({
         id: d.id,
+        tagIds: [],
         ...d.data()
       })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
@@ -134,6 +135,7 @@ export const useGoalStore = create((set, get) => ({
         status: goalData.status || 'in_progress',
         progress: Number(goalData.progress || 0),
         milestones: milestones,
+        tagIds: Array.isArray(goalData.tagIds) ? goalData.tagIds : [],
         createdAt: new Date().toISOString()
       };
 
@@ -166,7 +168,6 @@ export const useGoalStore = create((set, get) => ({
       const newTitle = updatedFields.title !== undefined ? (updatedFields.title || '').trim() : (existingGoal.title || '').trim();
       const newCat = updatedFields.category !== undefined ? (updatedFields.category || '').trim() : (existingGoal.category || '').trim();
 
-      // Duplicate Check: if title or category changed/updated, check against OTHER goals in target category
       if (updatedFields.title !== undefined || updatedFields.category !== undefined) {
         const duplicate = get().goals.find(g =>
           g.id !== id &&
@@ -203,12 +204,74 @@ export const useGoalStore = create((set, get) => ({
     }
   },
 
+  updateGoalTags: async (goalId, newTagIds) => {
+    try {
+      const user = useAuthStore.getState().user;
+      const uid = user ? user.uid : 'guest';
+
+      const goal = get().goals.find(g => g.id === goalId);
+      if (!goal) return;
+
+      const updated = get().goals.map(g => g.id === goalId ? { ...g, tagIds: newTagIds } : g);
+      set({ goals: updated });
+      saveLocalUserBackup('goals', uid, updated);
+
+      if (user && !goalId.startsWith('local_')) {
+        await updateDoc(doc(db, 'users', uid, 'goals', goalId), { tagIds: newTagIds });
+      }
+    } catch (error) {
+      console.error('Error updating goal tags:', error);
+    }
+  },
+
+  addTagToGoal: async (goalId, tagId) => {
+    const goal = get().goals.find(g => g.id === goalId);
+    if (!goal) return;
+    const currentTagIds = Array.isArray(goal.tagIds) ? goal.tagIds : [];
+    if (currentTagIds.includes(tagId)) return;
+    const newTagIds = [...currentTagIds, tagId];
+    await get().updateGoalTags(goalId, newTagIds);
+  },
+
+  removeTagFromGoal: async (goalId, tagId) => {
+    const goal = get().goals.find(g => g.id === goalId);
+    if (!goal) return;
+    const currentTagIds = Array.isArray(goal.tagIds) ? goal.tagIds : [];
+    const newTagIds = currentTagIds.filter(id => id !== tagId);
+    await get().updateGoalTags(goalId, newTagIds);
+  },
+
+  removeTagFromAllGoals: async (tagId) => {
+    const user = useAuthStore.getState().user;
+    const uid = user ? user.uid : 'guest';
+
+    const updatedGoals = get().goals.map(g => {
+      const currentIds = Array.isArray(g.tagIds) ? g.tagIds : [];
+      if (currentIds.includes(tagId)) {
+        const nextIds = currentIds.filter(id => id !== tagId);
+        if (user && !g.id.startsWith('local_')) {
+          updateDoc(doc(db, 'users', uid, 'goals', g.id), { tagIds: nextIds }).catch(console.error);
+        }
+        return { ...g, tagIds: nextIds };
+      }
+      return g;
+    });
+
+    set({ goals: updatedGoals });
+    saveLocalUserBackup('goals', uid, updatedGoals);
+  },
+
   toggleGoalStatus: async (id) => {
     const goal = get().goals.find(g => g.id === id);
     if (!goal) return;
 
     const newStatus = goal.status === 'completed' ? 'in_progress' : 'completed';
-    const newProgress = newStatus === 'completed' ? 100 : (goal.progress === 100 ? 0 : goal.progress);
+    const newProgress = newStatus === 'completed' ? 100 : (
+      goal.milestones && goal.milestones.length > 0
+        ? Math.round((goal.milestones.filter(m => m.completed).length / goal.milestones.length) * 100)
+        : 0
+    );
+
     await get().updateGoal(id, { status: newStatus, progress: newProgress });
   },
 
@@ -221,8 +284,7 @@ export const useGoalStore = create((set, get) => ({
     );
 
     const completedCount = updatedMilestones.filter(m => m.completed).length;
-    const totalCount = updatedMilestones.length;
-    const newProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : goal.progress;
+    const newProgress = Math.round((completedCount / updatedMilestones.length) * 100);
     const newStatus = newProgress === 100 ? 'completed' : 'in_progress';
 
     await get().updateGoal(goalId, {
@@ -247,9 +309,5 @@ export const useGoalStore = create((set, get) => ({
     } catch (error) {
       console.error('Error deleting goal:', error);
     }
-  },
-
-  resetStore: () => {
-    set({ goals: [], categories: DEFAULT_CATEGORIES, loading: false });
   }
 }));

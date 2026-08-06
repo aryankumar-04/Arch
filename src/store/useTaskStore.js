@@ -31,6 +31,7 @@ export const useTaskStore = create((set, get) => ({
       const unsub = onSnapshot(colRef, (snapshot) => {
         const tasksData = snapshot.docs.map(d => ({
           id: d.id,
+          tagIds: [],
           ...d.data()
         })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
@@ -48,7 +49,7 @@ export const useTaskStore = create((set, get) => ({
     }
   },
 
-  addTask: async (title, priority = 'medium') => {
+  addTask: async (title, priority = 'medium', tagIds = []) => {
     try {
       const user = useAuthStore.getState().user;
       const uid = user ? user.uid : 'guest';
@@ -57,6 +58,7 @@ export const useTaskStore = create((set, get) => ({
         title: title ? title.trim() : 'Untitled Task',
         status: 'todo',
         priority: priority,
+        tagIds: Array.isArray(tagIds) ? tagIds : [],
         createdAt: new Date().toISOString()
       };
 
@@ -86,7 +88,7 @@ export const useTaskStore = create((set, get) => ({
         console.error("Firestore write failed:", fbErr);
       }
 
-      // 3. Reconcile state: filter out tempId AND savedTask.id, then insert single clean instance
+      // 3. Reconcile state
       const latestTasks = get().tasks.filter(t => t.id !== tempId && t.id !== savedTask.id);
       const reconciled = [savedTask, ...latestTasks].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
@@ -136,6 +138,71 @@ export const useTaskStore = create((set, get) => ({
     } catch (error) {
       console.error("Error toggling task status:", error);
     }
+  },
+
+  updateTaskTags: async (taskId, newTagIds) => {
+    try {
+      const user = useAuthStore.getState().user;
+      const uid = user ? user.uid : 'guest';
+
+      const task = get().tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const updatedTask = { ...task, tagIds: newTagIds };
+      const updated = get().tasks.map(t => t.id === taskId ? updatedTask : t);
+
+      set({ tasks: updated });
+      saveLocalUserBackup('tasks', uid, updated);
+
+      if (user && uid !== 'guest' && uid !== 'guest_user' && !taskId.startsWith('local_')) {
+        try {
+          await updateDoc(doc(db, 'users', uid, 'tasks', taskId), {
+            tagIds: newTagIds
+          });
+        } catch (fbErr) {
+          console.error("Firestore updateTaskTags error:", fbErr);
+        }
+      }
+    } catch (error) {
+      console.error("Error updating task tags:", error);
+    }
+  },
+
+  addTagToTask: async (taskId, tagId) => {
+    const task = get().tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const currentTagIds = Array.isArray(task.tagIds) ? task.tagIds : [];
+    if (currentTagIds.includes(tagId)) return;
+    const newTagIds = [...currentTagIds, tagId];
+    await get().updateTaskTags(taskId, newTagIds);
+  },
+
+  removeTagFromTask: async (taskId, tagId) => {
+    const task = get().tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const currentTagIds = Array.isArray(task.tagIds) ? task.tagIds : [];
+    const newTagIds = currentTagIds.filter(id => id !== tagId);
+    await get().updateTaskTags(taskId, newTagIds);
+  },
+
+  removeTagFromAllTasks: async (tagId) => {
+    const user = useAuthStore.getState().user;
+    const uid = user ? user.uid : 'guest';
+
+    const updatedTasks = get().tasks.map(t => {
+      const currentIds = Array.isArray(t.tagIds) ? t.tagIds : [];
+      if (currentIds.includes(tagId)) {
+        const nextIds = currentIds.filter(id => id !== tagId);
+        if (user && uid !== 'guest' && uid !== 'guest_user' && !t.id.startsWith('local_')) {
+          updateDoc(doc(db, 'users', uid, 'tasks', t.id), { tagIds: nextIds }).catch(console.error);
+        }
+        return { ...t, tagIds: nextIds };
+      }
+      return t;
+    });
+
+    set({ tasks: updatedTasks });
+    saveLocalUserBackup('tasks', uid, updatedTasks);
   },
 
   deleteTask: async (id) => {

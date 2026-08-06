@@ -186,7 +186,7 @@ const Calendar = () => {
 
             return (
               <div
-                key={idx}
+                key={cell.dateStr}
                 onClick={() => setSelectedDateStr(cell.dateStr)}
                 className={`calendar-day-cell ${cell.isCurrentMonth ? '' : 'outside-month'} ${isSelected ? 'selected-day' : ''}`}
               >

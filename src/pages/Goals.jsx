@@ -1,16 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
-import { useGoalStore } from '../store';
+import { useGoalStore, useTagStore } from '../store';
 import StatCard from '../components/common/StatCard';
 import Modal from '../components/common/Modal';
 import Button from '../components/common/Button';
 import Skeleton from '../components/common/Skeleton';
 import DuplicateErrorBanner from '../components/common/DuplicateErrorBanner';
+import TagFilterBar from '../components/tags/TagFilterBar';
+import TagChip from '../components/tags/TagChip';
+import TagPickerPopover from '../components/tags/TagPickerPopover';
 import { PlusIcon, TrashIcon, EditIcon } from '../components/common/Icons';
 
 const Goals = () => {
   const {
-    goals, categories, loading, fetchGoals, addGoal, updateGoal, addCategory, deleteCategory, toggleGoalStatus, toggleMilestone, deleteGoal
+    goals, categories, loading, fetchGoals, addGoal, updateGoal, addCategory, deleteCategory, toggleGoalStatus, toggleMilestone, deleteGoal, addTagToGoal, removeTagFromGoal
   } = useGoalStore();
+
+  const { tags, fetchTags } = useTagStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
@@ -18,7 +23,13 @@ const Goals = () => {
   const [editingGoalId, setEditingGoalId] = useState(null);
   const [duplicateError, setDuplicateError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState([]);
   const modalBodyRef = useRef(null);
+
+  useEffect(() => {
+    fetchGoals();
+    fetchTags();
+  }, [fetchGoals, fetchTags]);
 
   useEffect(() => {
     if (duplicateError && modalBodyRef.current) {
@@ -37,10 +48,6 @@ const Goals = () => {
     targetDate: '',
     milestonesText: ''
   });
-
-  useEffect(() => {
-    fetchGoals();
-  }, [fetchGoals]);
 
   const handleOpenModal = () => {
     setEditingGoalId(null);
@@ -100,6 +107,27 @@ const Goals = () => {
     setCategoryError(null);
   };
 
+  const handleToggleFilterTag = (tagId) => {
+    setSelectedTagIds(prev =>
+      prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
+    );
+  };
+
+  const handleClearFilters = () => {
+    setSelectedTagIds([]);
+  };
+
+  const handleToggleGoalTag = async (goalId, tagId) => {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+    const currentTagIds = Array.isArray(goal.tagIds) ? goal.tagIds : [];
+    if (currentTagIds.includes(tagId)) {
+      await removeTagFromGoal(goalId, tagId);
+    } else {
+      await addTagToGoal(goalId, tagId);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!goalForm.title.trim()) return;
@@ -143,6 +171,14 @@ const Goals = () => {
       setIsSubmitting(false);
     }
   };
+
+  // Filter goals by selected tags (OR filter logic)
+  const filteredGoals = selectedTagIds.length === 0
+    ? goals
+    : goals.filter(g => {
+        const goalTagIds = Array.isArray(g.tagIds) ? g.tagIds : [];
+        return goalTagIds.some(id => selectedTagIds.includes(id));
+      });
 
   // Metrics
   const totalGoals = goals.length;
@@ -195,6 +231,14 @@ const Goals = () => {
         />
       </div>
 
+      {/* Smart Tag Filter Bar (Goals Module) */}
+      <TagFilterBar
+        selectedTagIds={selectedTagIds}
+        onToggleFilterTag={handleToggleFilterTag}
+        onClearFilters={handleClearFilters}
+        module="goals"
+      />
+
       {/* Category Deletion Error Banner */}
       {categoryError && (
         <DuplicateErrorBanner
@@ -216,47 +260,50 @@ const Goals = () => {
         </div>
       ) : (
         categories.map(cat => {
-        const catGoals = goals.filter(g => g.category === cat);
-        return (
-          <div key={cat} className="mb-32">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.2rem' }}>{getCategoryEmoji(cat)}</span>
-                <h2 style={{ fontSize: '1.1rem', fontWeight: 900, textTransform: 'uppercase' }}>
-                  {cat}
-                </h2>
+          const catGoals = filteredGoals.filter(g => g.category === cat);
+          return (
+            <div key={cat} className="mb-32">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>{getCategoryEmoji(cat)}</span>
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: 900, textTransform: 'uppercase' }}>
+                    {cat}
+                  </h2>
+                </div>
+                <button
+                  className="btn-icon"
+                  style={{ color: 'var(--red)' }}
+                  onClick={() => handleDeleteCategoryClick(cat)}
+                  title={`Delete ${cat} category`}
+                >
+                  <TrashIcon size={16} />
+                </button>
               </div>
-              <button
-                className="btn-icon"
-                style={{ color: 'var(--red)' }}
-                onClick={() => handleDeleteCategoryClick(cat)}
-                title={`Delete ${cat} category`}
-              >
-                <TrashIcon size={16} />
-              </button>
-            </div>
 
-            {catGoals.length === 0 ? (
-              <p className="text-muted" style={{ fontWeight: 600, fontSize: '0.9rem', fontStyle: 'italic', paddingLeft: '8px' }}>
-                No goals in this category
-              </p>
-            ) : (
-              <div className="dash-grid">
-                {catGoals.map(goal => (
-                  <GoalCard
-                    key={goal.id}
-                    goal={goal}
-                    toggleGoalStatus={toggleGoalStatus}
-                    toggleMilestone={toggleMilestone}
-                    deleteGoal={deleteGoal}
-                    onEdit={handleOpenEditGoalModal}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      }))}
+              {catGoals.length === 0 ? (
+                <p className="text-muted" style={{ fontWeight: 600, fontSize: '0.9rem', fontStyle: 'italic', paddingLeft: '8px' }}>
+                  {selectedTagIds.length > 0 ? "No goals match tag filter in this category" : "No goals in this category"}
+                </p>
+              ) : (
+                <div className="dash-grid">
+                  {catGoals.map(goal => (
+                    <GoalCard
+                      key={goal.id}
+                      goal={goal}
+                      allTags={tags}
+                      toggleGoalStatus={toggleGoalStatus}
+                      toggleMilestone={toggleMilestone}
+                      deleteGoal={deleteGoal}
+                      onEdit={handleOpenEditGoalModal}
+                      onToggleTag={handleToggleGoalTag}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
 
       {/* Floating Add Button */}
       <button className="fab-btn" onClick={handleOpenModal} title="Add Goal">
@@ -410,9 +457,14 @@ const Goals = () => {
 };
 
 // Sub-component for individual Goal Card
-const GoalCard = ({ goal, toggleGoalStatus, toggleMilestone, deleteGoal, onEdit }) => {
+const GoalCard = ({ goal, allTags = [], toggleGoalStatus, toggleMilestone, deleteGoal, onEdit, onToggleTag }) => {
   const isCompleted = goal.status === 'completed';
   const progressPercent = goal.progress || 0;
+  const tagIds = Array.isArray(goal.tagIds) ? goal.tagIds : [];
+
+  // Filter tags for goals module
+  const moduleTags = allTags.filter(t => t.type === 'preset' || t.module === 'all' || t.module === 'goals');
+  const assignedTags = moduleTags.filter(t => tagIds.includes(t.id));
 
   return (
     <div className="card card-hover" style={{ display: 'flex', flexDirection: 'column', padding: '20px' }}>
@@ -424,6 +476,24 @@ const GoalCard = ({ goal, toggleGoalStatus, toggleMilestone, deleteGoal, onEdit 
         <span className={`badge ${isCompleted ? 'badge-green' : 'badge-yellow'}`} style={{ flexShrink: 0, marginLeft: '8px' }}>
           {isCompleted ? '✓ DONE' : 'IN PROGRESS'}
         </span>
+      </div>
+
+      {/* Tags Chips Section */}
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+        {assignedTags.map(tag => (
+          <TagChip
+            key={tag.id}
+            tag={tag}
+            onRemove={onToggleTag ? () => onToggleTag(goal.id, tag.id) : null}
+          />
+        ))}
+        {onToggleTag && (
+          <TagPickerPopover
+            assignedTagIds={tagIds}
+            onToggleTag={(tagId) => onToggleTag(goal.id, tagId)}
+            module="goals"
+          />
+        )}
       </div>
 
       {/* Target Date */}

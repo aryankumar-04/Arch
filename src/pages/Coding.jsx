@@ -5,6 +5,8 @@ import Card from '../components/common/Card';
 import StatCard from '../components/common/StatCard';
 import { TrashIcon, PlusIcon, SearchIcon } from '../components/common/Icons';
 import { useDebounce } from '../utils/useDebounce';
+import ContributionHeatmap from '../components/coding/ContributionHeatmap';
+import ActivityBreakdown, { getPlatformColor } from '../components/coding/ActivityBreakdown';
 
 const Coding = () => {
   const { problems, loading, fetchCodingData, addProblem, deleteProblem } = useCodingStore();
@@ -60,6 +62,16 @@ const Coding = () => {
         <StatCard value={easyCount} label="EASY SOLVED" bg="#ecfdf5" color="var(--green)" />
         <StatCard value={mediumCount} label="MEDIUM SOLVED" bg="#fffbeb" color="var(--orange)" />
         <StatCard value={hardCount} label="HARD SOLVED" bg="#fef2f2" color="var(--red)" />
+      </div>
+
+      {/* Heatmap & Activity Breakdown Row */}
+      <div className="mb-24" style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'stretch' }}>
+        <div style={{ flex: '2.2', minWidth: '320px', display: 'flex' }}>
+          <ContributionHeatmap problems={problems} />
+        </div>
+        <div style={{ flex: '1', minWidth: '280px', display: 'flex' }}>
+          <ActivityBreakdown problems={problems} />
+        </div>
       </div>
 
       {/* Log Problem / GitHub Push Form */}
@@ -150,9 +162,8 @@ const Coding = () => {
           <div className="empty-state">No coding logs found. Time to grind!</div>
         ) : (
           filteredProblems.map(p => {
-            const diffColor = p.difficulty === 'Easy' ? 'var(--green)' : p.difficulty === 'Medium' ? 'var(--orange)' : 'var(--red)';
             return (
-              <Card key={p.id} className="card-hover flex flex-between flex-center" style={{ borderLeft: `6px solid ${diffColor}` }}>
+              <Card key={p.id} className="card-hover flex flex-between flex-center" style={{ borderLeft: `6px solid ${getPlatformColor(p.platform)}` }}>
                 <div>
                   <div className="flex align-center gap-8 mb-4">
                     <h3 style={{ margin: 0, fontWeight: 900, fontSize: '1.05rem', textTransform: 'uppercase' }}>{p.title}</h3>

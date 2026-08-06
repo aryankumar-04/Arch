@@ -14,6 +14,7 @@ import { useGoalStore } from './useGoalStore';
 import { useCodingStore } from './useCodingStore';
 import { useSettingsStore } from './useSettingsStore';
 import { useOnboardingStore } from './useOnboardingStore';
+import { useTagStore } from './useTagStore';
 
 export const clearAllStoresOnLogout = () => {
   useTaskStore.getState().resetStore?.();
@@ -35,6 +36,7 @@ export const syncAllStoresForUser = (user) => {
 
   if (user) {
     // Trigger immediate parallel fetch for active user
+    useTagStore.getState().fetchTags?.();
     useTaskStore.getState().fetchTasks?.();
     useJournalStore.getState().fetchEntries?.();
     useCalendarStore.getState().fetchEvents?.();

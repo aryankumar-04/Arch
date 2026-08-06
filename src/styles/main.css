@@ -1589,6 +1589,109 @@ div[style*="width:"] {
   }
 }
 
+/* Info Icon & Discovery Pulse Animation */
+.info-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text2);
+  color: var(--text2);
+  background: var(--bg2);
+  padding: 0;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  position: relative;
+  vertical-align: middle;
+}
+
+.info-icon-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+  background: var(--bg4);
+}
+
+.info-icon-pulse {
+  border-color: var(--accent);
+  color: var(--accent);
+  animation: hintPulse 1.5s infinite;
+}
+
+@keyframes hintPulse {
+  0% {
+    box-shadow: 0 0 0 0px rgba(37, 99, 235, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(37, 99, 235, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0px rgba(37, 99, 235, 0);
+  }
+}
+
+.info-tooltip-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: 260px;
+  max-width: calc(100vw - 48px);
+  z-index: 120;
+  background: var(--bg2);
+  color: var(--text);
+  border: var(--bw) solid var(--border);
+  box-shadow: 4px 4px 0px var(--border);
+  padding: 10px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: none;
+  letter-spacing: normal;
+  border-radius: 4px;
+  animation: popoverEntrance 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.info-tooltip-popover::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 10px;
+  width: 10px;
+  height: 10px;
+  background: var(--bg2);
+  border-left: var(--bw) solid var(--border);
+  border-top: var(--bw) solid var(--border);
+  transform: rotate(45deg);
+}
+
+@keyframes popoverEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.popover-fade-out {
+  animation: popoverExit 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes popoverExit {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.95);
+  }
+}
+
 
 
 

@@ -3,6 +3,7 @@ import { useGymStore } from '../store';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
 import { TrashIcon, PlusIcon } from '../components/common/Icons';
+import { groupItemsBy8Weeks } from '../utils/weekBuckets';
 
 const getLocalYMD = () => {
   const d = new Date();
@@ -40,12 +41,9 @@ const Gym = () => {
     setDuration('');
   };
 
-  const weeks = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'];
-  const gymFreqData = weeks.map((w, idx) => ({
-    label: w,
-    value: workouts.length > 0 ? (idx === 7 ? workouts.length : Math.floor((workouts.length * (idx + 1)) / 8)) : 0
-  }));
-  const maxGymVal = Math.max(1, workouts.length);
+  // Group real workouts into 8 calendar week buckets
+  const gymFreqData = groupItemsBy8Weeks(workouts, w => w.date || (w.createdAt ? String(w.createdAt).split('T')[0] : null));
+  const maxGymVal = Math.max(1, ...gymFreqData.map(d => d.value));
 
   return (
     <div>
@@ -98,7 +96,7 @@ const Gym = () => {
               }} />
             ))}
             {gymFreqData.map((d, i) => {
-              const heightPct = maxGymVal > 0 ? Math.min(100, Math.max(4, (d.value / maxGymVal) * 100)) : 4;
+              const heightPct = maxGymVal > 0 && d.value > 0 ? Math.min(100, Math.max(6, (d.value / maxGymVal) * 100)) : 0;
               return (
                 <div key={i} style={{
                   display: 'flex',
@@ -110,14 +108,20 @@ const Gym = () => {
                   maxWidth: '36px',
                   zIndex: 2
                 }}>
+                  {d.value > 0 && (
+                    <div style={{ fontSize: '0.68rem', fontWeight: 900, color: 'var(--text)', marginBottom: '2px' }}>
+                      {d.value}
+                    </div>
+                  )}
                   <div 
                     title={`${d.label}: ${d.value} workouts`}
                     style={{
                       width: '100%',
                       height: `${heightPct}%`,
-                      background: d.value > 0 ? 'var(--accent)' : 'var(--bg4)',
-                      border: 'var(--bw) solid var(--border)',
-                      borderBottom: 'none'
+                      background: d.value > 0 ? 'var(--accent)' : 'transparent',
+                      border: d.value > 0 ? 'var(--bw) solid var(--border)' : 'none',
+                      borderBottom: 'none',
+                      transition: 'height 0.3s ease'
                     }} 
                   />
                 </div>

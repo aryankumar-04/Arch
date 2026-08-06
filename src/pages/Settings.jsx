@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
-import { useSettingsStore, useTaskStore } from '../store';
+import DropdownMenu from '../components/common/DropdownMenu';
+import ImportModal from '../components/settings/ImportModal';
+import { useSettingsStore } from '../store';
 import { LinkedInIcon } from '../components/common/Icons';
+import { exportToJSON, exportToCSV, exportToPDF } from '../utils/dataExporter';
 
 const Settings = () => {
   const {
@@ -14,7 +17,11 @@ const Settings = () => {
   const [nameInput, setNameInput] = useState(username || 'Aryan');
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetConfirmInput, setResetConfirmInput] = useState('');
-  const [importStatus, setImportStatus] = useState('');
+
+  // Import Modal & Status Toast
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [selectedImportData, setSelectedImportData] = useState(null);
+  const [importStatusToast, setImportStatusToast] = useState('');
 
   useEffect(() => {
     initSettings();
@@ -42,75 +49,26 @@ const Settings = () => {
     setUsername(nameInput);
   };
 
-  // 1. Export All Data (JSON)
-  const handleExportJSON = () => {
-    try {
-      const allData = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('archos_')) {
-          allData[key] = localStorage.getItem(key);
-        }
-      }
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allData, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `arch_backup_${new Date().toISOString().split('T')[0]}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-    } catch (err) {
-      console.error('Export failed:', err);
-    }
-  };
-
-  // 2. Import Data (JSON)
-  const handleImportJSON = (e) => {
+  const handleFileSelectForImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      try {
-        const importedData = JSON.parse(event.target.result);
-        for (let key in importedData) {
-          if (importedData.hasOwnProperty(key)) {
-            const val = typeof importedData[key] === 'string' ? importedData[key] : JSON.stringify(importedData[key]);
-            localStorage.setItem(key, val);
-          }
-        }
-        setImportStatus('✓ Data imported successfully! Reloading...');
-        setTimeout(() => window.location.reload(), 1200);
-      } catch (err) {
-        console.error('Import parse error:', err);
-        setImportStatus('❌ Error importing file. Invalid JSON format.');
-      }
+      setSelectedImportData(event.target.result);
+      setIsImportModalOpen(true);
     };
     reader.readAsText(file);
+    e.target.value = ''; // Reset input to allow re-importing same file
   };
 
-  // 3. Export Tasks (CSV)
-  const handleExportTasksCSV = () => {
-    try {
-      const tasks = useTaskStore.getState().tasks || [];
-      let csvContent = "data:text/csv;charset=utf-8,Title,Status,Priority,Created\n";
-      tasks.forEach(t => {
-        csvContent += `"${(t.title || '').replace(/"/g, '""')}","${t.status || ''}","${t.priority || ''}","${t.createdAt || ''}"\n`;
-      });
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `arch_tasks_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err) {
-      console.error('Export tasks failed:', err);
-      alert('No tasks data to export.');
-    }
+  const handleImportSuccess = (summary) => {
+    calculateStorageUsage();
+    setImportStatusToast(`✓ Imported ${summary.totalCount} items successfully!`);
+    setTimeout(() => setImportStatusToast(''), 4000);
   };
 
-  // 4. Reset All Data
+  // Reset All Data
   const handleResetData = () => {
     if (resetConfirmInput !== 'RESET') return;
     for (let key in localStorage) {
@@ -120,6 +78,12 @@ const Settings = () => {
     }
     window.location.reload();
   };
+
+  const exportDropdownItems = [
+    { label: 'JSON Backup', icon: '📦', onClick: exportToJSON },
+    { label: 'CSV Spreadsheet', icon: '📊', onClick: exportToCSV },
+    { label: 'PDF Life Report', icon: '📄', onClick: exportToPDF }
+  ];
 
   const presetOptions = [
     { key: 'paper', label: '📄 Paper Soft', color: '#2563EB' },
@@ -138,63 +102,57 @@ const Settings = () => {
         <h1>⚙️ SETTINGS</h1>
       </div>
 
+      {/* DATA MANAGEMENT & ABOUT ARCHOS ROW */}
       <div className="grid-2 mb-24">
-        {/* DATA MANAGEMENT CARD matching screenshot */}
-        <Card>
-          <h3 className="card-title">💾 DATA MANAGEMENT</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <button className="btn btn-primary" onClick={handleExportJSON}>
-              💾 EXPORT ALL DATA (JSON)
-            </button>
-
-            <label className="btn btn-ghost" style={{ cursor: 'pointer', margin: 0, textAlign: 'center' }}>
-              📥 IMPORT DATA (JSON)
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImportJSON}
-                style={{ display: 'none' }}
+        {/* DATA MANAGEMENT CARD */}
+        <Card style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <h3 className="card-title">💾 DATA MANAGEMENT</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Export Dropdown Button */}
+              <DropdownMenu
+                trigger={
+                  <button type="button" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+                    EXPORT DATA ▾
+                  </button>
+                }
+                items={exportDropdownItems}
               />
-            </label>
-            {importStatus && (
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, textAlign: 'center' }}>{importStatus}</div>
+
+              {/* Import Data Button */}
+              <label className="btn btn-ghost" style={{ cursor: 'pointer', margin: 0, textAlign: 'center', display: 'block' }}>
+                📥 IMPORT JSON
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileSelectForImport}
+                  style={{ display: 'none' }}
+                />
+              </label>
+
+              {/* Reset All Data Button */}
+              <button type="button" className="btn btn-danger" onClick={() => { setResetConfirmInput(''); setIsResetModalOpen(true); }}>
+                🗑️ RESET ALL DATA
+              </button>
+            </div>
+
+            {importStatusToast && (
+              <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--green)', marginTop: '12px', textAlign: 'center' }}>
+                {importStatusToast}
+              </div>
             )}
-
-            <button className="btn btn-ghost" onClick={handleExportTasksCSV}>
-              📊 EXPORT TASKS (CSV)
-            </button>
-
-            <button className="btn btn-danger" onClick={() => { setResetConfirmInput(''); setIsResetModalOpen(true); }}>
-              🗑️ RESET ALL DATA
-            </button>
           </div>
         </Card>
 
-        {/* ABOUT ARCHOS CARD matching screenshot */}
-        <Card>
-          <h3 className="card-title">ℹ️ ABOUT ARCHOS</h3>
-          <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text2)', marginBottom: '16px' }}>
-            <strong>ArchOS</strong> is your personal life dashboard.<br />
-            All data is stored locally in your browser using LocalStorage & Firestore.<br />
-            Private, customizable, and high-performance.
-          </p>
-
-          <div style={{ fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', marginBottom: '8px' }}>
-            Keyboard Shortcuts:
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700 }}>
-            <div className="flex align-center gap-12">
-              <kbd style={{ background: 'var(--bg4)', border: '1px solid var(--border)', padding: '2px 8px', fontWeight: 900 }}>Ctrl+K</kbd>
-              <span>Global Search</span>
-            </div>
-            <div className="flex align-center gap-12">
-              <kbd style={{ background: 'var(--bg4)', border: '1px solid var(--border)', padding: '2px 8px', fontWeight: 900 }}>Ctrl+N</kbd>
-              <span>Quick Add Task</span>
-            </div>
-            <div className="flex align-center gap-12">
-              <kbd style={{ background: 'var(--bg4)', border: '1px solid var(--border)', padding: '2px 8px', fontWeight: 900 }}>Esc</kbd>
-              <span>Close Modal / Search</span>
-            </div>
+        {/* ABOUT ARCHOS CARD (Keyboard shortcuts removed per requirement) */}
+        <Card style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <h3 className="card-title">ℹ️ ABOUT ARCHOS</h3>
+            <p style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text2)', lineHeight: '1.6', margin: 0 }}>
+              <strong>ArchOS</strong> is your personal life dashboard.<br />
+              All data is stored locally in your browser using LocalStorage & Firestore.<br />
+              Private, customizable, and high-performance.
+            </p>
           </div>
         </Card>
       </div>
@@ -279,7 +237,7 @@ const Settings = () => {
       </div>
 
       <div className="grid-2 mb-24">
-        {/* STORAGE USAGE CARD matching screenshot */}
+        {/* STORAGE USAGE CARD */}
         <Card>
           <h3 className="card-title">📊 STORAGE USAGE</h3>
           <div style={{ fontSize: '1.2rem', fontWeight: 900, marginBottom: '8px' }}>
@@ -390,6 +348,14 @@ const Settings = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Import Modal */}
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        rawData={selectedImportData}
+        onImportSuccess={handleImportSuccess}
+      />
     </div>
   );
 };

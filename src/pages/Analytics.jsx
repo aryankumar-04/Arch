@@ -10,8 +10,9 @@ import {
   useGoalStore
 } from '../store';
 import Card from '../components/common/Card';
+import { groupItemsBy8Weeks, groupExpensesBy8Weeks, getPast8WeeksBuckets } from '../utils/weekBuckets';
 
-// Custom Neo-Brutalist Bar Chart Component
+// Custom Neo-Brutalist Bar Chart Component with Custom Tooltip Support
 const NeoBarChart = ({ data, labelKey = 'label', valueKey = 'value', height = 200, maxValOverride }) => {
   const values = data.map(d => Number(d[valueKey]) || 0);
   const maxVal = maxValOverride || Math.max(...values, 1);
@@ -65,25 +66,32 @@ const NeoBarChart = ({ data, labelKey = 'label', valueKey = 'value', height = 20
         {/* Bars */}
         {data.map((d, i) => {
           const val = Number(d[valueKey]) || 0;
-          const heightPct = maxVal > 0 ? Math.min(100, Math.max(4, (val / maxVal) * 100)) : 4;
+          const heightPct = maxVal > 0 && val > 0 ? Math.min(100, Math.max(6, (val / maxVal) * 100)) : 0;
+          const tooltipText = d.tooltip || `${d[labelKey]}: ${val}`;
+
           return (
             <div key={i} style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               height: '100%',
-              justifyContent: 'flex-end',
+              justify: 'flex-end',
               flex: 1,
               maxWidth: '36px',
               zIndex: 2
             }}>
+              {val > 0 && (
+                <div style={{ fontSize: '0.68rem', fontWeight: 900, color: 'var(--text)', marginBottom: '2px' }}>
+                  {val}
+                </div>
+              )}
               <div 
-                title={`${d[labelKey]}: ${val}`}
+                title={tooltipText}
                 style={{
                   width: '100%',
                   height: `${heightPct}%`,
-                  background: val > 0 ? 'var(--accent)' : 'var(--bg4)',
-                  border: 'var(--bw) solid var(--border)',
+                  background: val > 0 ? 'var(--accent)' : 'transparent',
+                  border: val > 0 ? 'var(--bw) solid var(--border)' : 'none',
                   borderBottom: 'none',
                   transition: 'height 0.3s ease'
                 }} 
@@ -96,7 +104,7 @@ const NeoBarChart = ({ data, labelKey = 'label', valueKey = 'value', height = 20
       {/* X Axis Labels */}
       <div style={{
         display: 'flex',
-        justify: 'space-around',
+        justifyContent: 'space-around',
         marginTop: '8px',
         paddingLeft: '12px',
         paddingRight: '12px'
@@ -187,7 +195,7 @@ const NeoLineChart = ({ data, height = 200, lineColor = '#EF4444' }) => {
               stroke="var(--border)"
               strokeWidth="1.5"
             >
-              <title>{`${p.label}: ${p.value}`}</title>
+              <title>{`${p.label}: ₹${p.value}`}</title>
             </circle>
           ))}
         </svg>
@@ -196,14 +204,16 @@ const NeoLineChart = ({ data, height = 200, lineColor = '#EF4444' }) => {
       {/* X Axis Labels */}
       <div style={{
         display: 'flex',
-        justify: 'space-between',
+        justifyContent: 'space-around',
         marginTop: '8px'
       }}>
         {data.map((d, i) => (
           <span key={i} style={{
             fontSize: '0.65rem',
             fontWeight: 800,
-            color: 'var(--text2)'
+            color: 'var(--text2)',
+            textAlign: 'center',
+            flex: 1
           }}>
             {d.label}
           </span>
@@ -234,71 +244,259 @@ const Analytics = () => {
     fetchGoals();
   }, [fetchTasks, fetchWorkouts, fetchEntries, fetchExpenses, fetchCodingData, fetchMovies, fetchWardrobe, fetchGoals]);
 
-  // Productivity Score logic (0 to 100)
-  const completedTasksCount = tasks.filter(t => t.status === 'done' || t.status === 'completed' || t.completed).length;
+  // General Counts
+  const completedTasks = tasks.filter(t => t.status === 'done' || t.status === 'completed' || t.completed);
+  const completedTasksCount = completedTasks.length;
   const watchedMoviesCount = movies.filter(m => m.status === 'watched').length;
   const completedGoalsCount = goals.filter(g => g.status === 'completed').length;
 
+  // Productivity Score logic
   const rawScore = (completedTasksCount * 8) + (workouts.length * 12) + (problems.length * 10) + (entries.length * 5) + (completedGoalsCount * 15);
   const productivityScore = Math.min(100, Math.max(10, rawScore));
-
   const journalStreak = entries.length;
 
-  // Weeks buckets
-  const weeks = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'];
+  // =========================================================================
+  // LIFE BALANCE INDEX FORMULAS & CALCULATIONS
+  // =========================================================================
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  // Sleep hours extracted from actual Journal entries
-  const sleepData = entries.length > 0
-    ? entries.slice(0, 8).reverse().map((entry, idx) => ({
-        label: entry.date ? entry.date.substring(5) : `D${idx + 1}`,
-        value: Number(entry.sleepHours) || 7
-      }))
-    : [
-        { label: 'D1', value: 8 },
-        { label: 'D2', value: 7.5 },
-        { label: 'D3', value: 8 },
-        { label: 'D4', value: 6.5 },
-        { label: 'D5', value: 7 },
-        { label: 'D6', value: 8.5 },
-        { label: 'D7', value: 8 }
-      ];
+  /* 
+   * 1. FITNESS & GYM CONSISTENCY
+   * Formula: (Gym Workouts Logged in Past 30 Days / Monthly Target of 16 workouts) * 100
+   * Target: 16 workouts per month (~4 workouts/week). Capped at 100%. Fallback: 0%.
+   */
+  const workoutsLast30Days = workouts.filter(w => {
+    const d = w.date ? new Date(w.date) : (w.createdAt ? new Date(w.createdAt) : null);
+    return d && !isNaN(d.getTime()) && d >= thirtyDaysAgo;
+  }).length;
 
-  // Gym frequency
-  const gymFrequencyData = weeks.map((w, idx) => ({
-    label: w,
-    value: workouts.length > 0 ? (idx === 7 ? workouts.length : Math.floor((workouts.length * (idx + 1)) / 8)) : 0
-  }));
+  const fitnessGymPct = workouts.length === 0 ? 0 : Math.min(100, Math.round((workoutsLast30Days / 16) * 100));
 
-  // Tasks completed per week
-  const tasksCompletedData = weeks.map((w, idx) => ({
-    label: w,
-    value: completedTasksCount > 0 ? (idx === 7 ? completedTasksCount : Math.floor((completedTasksCount * (idx + 1)) / 8)) : 0
-  }));
-
-  // Coding solved per week
-  const codingSolvedData = weeks.map((w, idx) => ({
-    label: w,
-    value: problems.length > 0 ? (idx === 7 ? problems.length : Math.floor((problems.length * (idx + 1)) / 8)) : 0
-  }));
-
-  // Spending data line chart
-  const totalExpenseAmount = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const dayNodes = ['Day 1', 'Day 4', 'Day 8', 'Day 12', 'Day 16', 'Day 20', 'Day 24', 'Day 28'];
-  const moneySpentData = dayNodes.map((label, idx) => {
-    return {
-      label,
-      value: totalExpenseAmount > 0 ? Math.round((totalExpenseAmount * (idx + 1)) / dayNodes.length) : 0
-    };
+  /* 
+   * 2. CODING & DSA ACTIVITY
+   * Formula: (Unique Days with Logged Coding Activity in Past 30 Days / Target of 15 Active Days) * 100
+   * Target: 15 active coding days per month (~3-4 days/week). Capped at 100%. Fallback: 0%.
+   */
+  const codingDaysSet = new Set();
+  problems.forEach(p => {
+    const d = p.date ? new Date(p.date) : (p.createdAt ? new Date(p.createdAt) : null);
+    if (d && !isNaN(d.getTime()) && d >= thirtyDaysAgo) {
+      codingDaysSet.add(d.toISOString().substring(0, 10));
+    }
   });
+  const codingActiveDays = codingDaysSet.size;
+  const codingDsaPct = problems.length === 0 ? 0 : Math.min(100, Math.round((codingActiveDays / 15) * 100));
+
+  /* 
+   * 3. JOURNAL & SLEEP BALANCE
+   * Formula: 50% Journal Consistency Score + 50% Healthy Sleep Range Score
+   * - Journal Consistency: (Logged Journal Days in Past 30 Days / 30) * 100
+   * - Sleep Health Score: Average total sleep hours per logged day in past 30 days.
+   *   Ideal range: 7-9 hours = 100%. Penalizes deviation linearly.
+   * Fallback: 0% if no journal entries exist.
+   */
+  const journalEntriesLast30Days = entries.filter(e => {
+    const d = e.date ? new Date(e.date) : (e.createdAt ? new Date(e.createdAt) : null);
+    return d && !isNaN(d.getTime()) && d >= thirtyDaysAgo;
+  });
+
+  const journalConsistencyScore = Math.min(100, (journalEntriesLast30Days.length / 30) * 100);
+
+  let totalSleepHoursLogged = 0;
+  journalEntriesLast30Days.forEach(e => {
+    const night = typeof e.sleepCycle?.duration === 'number' ? e.sleepCycle.duration : (parseFloat(e.sleepHours) || 0);
+    const nap = typeof e.eveningNap?.duration === 'number' ? e.eveningNap.duration : (parseFloat(e.napHours) || 0);
+    totalSleepHoursLogged += (night + nap);
+  });
+
+  const avgSleepHours = journalEntriesLast30Days.length > 0 ? (totalSleepHoursLogged / journalEntriesLast30Days.length) : 0;
+
+  let sleepHealthScore = 0;
+  if (avgSleepHours >= 7 && avgSleepHours <= 9) {
+    sleepHealthScore = 100;
+  } else if (avgSleepHours > 0) {
+    sleepHealthScore = Math.max(0, Math.round(100 - Math.abs(avgSleepHours - 8) * 25));
+  }
+
+  const journalSleepPct = entries.length === 0
+    ? 0
+    : Math.min(100, Math.round((0.5 * journalConsistencyScore) + (0.5 * sleepHealthScore)));
+
+  /* 
+   * 4. GOALS COMPLETED
+   * Formula: (Completed Goals Count / Total Goals Count) * 100
+   * Fallback: 0% if total goals count is 0.
+   */
+  const goalsCompletedPct = goals.length === 0
+    ? 0
+    : Math.min(100, Math.round((completedGoalsCount / goals.length) * 100));
+
+  // Threshold Color Resolver
+  const getScoreColor = (pct) => {
+    if (pct >= 70) return 'var(--green, #10B981)';
+    if (pct >= 40) return 'var(--accent, #2563EB)';
+    if (pct >= 20) return 'var(--yellow, #F59E0B)';
+    return 'var(--red, #EF4444)';
+  };
+
+  // =========================================================================
+  // FIX: SLEEP HOURS LOGGED CHART DATA AGGREGATION
+  // Merges Night Sleep and Nap entries for the SAME calendar date into ONE bar
+  // =========================================================================
+  const sleepMap = new Map();
+
+  entries.forEach(entry => {
+    if (!entry) return;
+    let dateKey = '';
+    if (entry.date) {
+      dateKey = String(entry.date).substring(0, 10);
+    } else if (entry.createdAt) {
+      dateKey = new Date(entry.createdAt).toISOString().substring(0, 10);
+    }
+    if (!dateKey) return;
+
+    let night = 0;
+    if (typeof entry.sleepCycle?.duration === 'number') {
+      night = entry.sleepCycle.duration;
+    } else if (entry.sleepHours) {
+      night = parseFloat(entry.sleepHours) || 0;
+    }
+
+    let nap = 0;
+    if (typeof entry.eveningNap?.duration === 'number') {
+      nap = entry.eveningNap.duration;
+    } else if (entry.napHours) {
+      nap = parseFloat(entry.napHours) || 0;
+    }
+
+    if (!sleepMap.has(dateKey)) {
+      sleepMap.set(dateKey, { dateKey, night: 0, nap: 0 });
+    }
+
+    const record = sleepMap.get(dateKey);
+    record.night += night;
+    record.nap += nap;
+  });
+
+  const sortedSleepDays = Array.from(sleepMap.values())
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    .slice(-8);
+
+  const sleepData = sortedSleepDays.length > 0
+    ? sortedSleepDays.map(item => {
+        const total = Number((item.night + item.nap).toFixed(1));
+        const monthDayLabel = item.dateKey.length >= 10 ? item.dateKey.substring(5) : item.dateKey;
+        
+        let tooltipText = `Total: ${total}h`;
+        if (item.night > 0 && item.nap > 0) {
+          tooltipText = `Total: ${total}h (Night: ${item.night}h, Nap: ${item.nap}h)`;
+        } else if (item.nap > 0 && item.night === 0) {
+          tooltipText = `Total: ${item.nap}h (Nap: ${item.nap}h)`;
+        } else if (item.night > 0) {
+          tooltipText = `Total: ${item.night}h (Night: ${item.night}h)`;
+        }
+
+        return {
+          label: monthDayLabel,
+          value: total,
+          tooltip: tooltipText
+        };
+      })
+    : getPast8WeeksBuckets().map(b => ({ label: b.label, value: 0, tooltip: `${b.label}: 0h` }));
+
+  // Real-data week bucketing for all other charts
+  const gymFrequencyData = groupItemsBy8Weeks(workouts, w => w.date || w.createdAt);
+  const tasksCompletedData = groupItemsBy8Weeks(completedTasks, t => t.completedAt || t.date || t.createdAt);
+  const codingSolvedData = groupItemsBy8Weeks(problems, p => p.createdAt || p.date);
+  const moneySpentData = groupExpensesBy8Weeks(expenses);
+
+  const totalExpenseAmount = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
 
   return (
     <div style={{ position: 'relative', paddingBottom: '60px' }}>
       {/* Header */}
       <div className="page-header">
         <h1 className="flex flex-center gap-12">
-          <span>📊</span> SYSTEM ANALYTICS
+          <span>📊</span> ANALYTICS & LIFE INSIGHTS
         </h1>
       </div>
+
+      {/* PART 1: LIFE BALANCE INDEX SUMMARY BANNER */}
+      <Card className="mb-24" style={{ background: '#FFF', position: 'relative', borderLeft: '6px solid var(--accent, #2563EB)' }}>
+        <div style={{
+          fontSize: '0.88rem',
+          fontWeight: 900,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          borderBottom: 'var(--bw) solid var(--border)',
+          paddingBottom: '8px'
+        }}>
+          <span>🎯</span> LIFE BALANCE INDEX SUMMARY
+        </div>
+
+        <div className="grid-4" style={{ gap: '16px' }}>
+          <div style={{
+            background: 'var(--bg2, #F8FAFC)',
+            border: 'var(--bw) solid var(--border)',
+            padding: '14px 16px',
+            borderRadius: '6px'
+          }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 900, textTransform: 'uppercase', color: 'var(--text2)', marginBottom: '4px' }}>
+              💪 FITNESS & GYM
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: getScoreColor(fitnessGymPct) }}>
+              {fitnessGymPct}%
+            </div>
+          </div>
+
+          <div style={{
+            background: 'var(--bg2, #F8FAFC)',
+            border: 'var(--bw) solid var(--border)',
+            padding: '14px 16px',
+            borderRadius: '6px'
+          }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 900, textTransform: 'uppercase', color: 'var(--text2)', marginBottom: '4px' }}>
+              💻 CODING & DSA
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: getScoreColor(codingDsaPct) }}>
+              {codingDsaPct}%
+            </div>
+          </div>
+
+          <div style={{
+            background: 'var(--bg2, #F8FAFC)',
+            border: 'var(--bw) solid var(--border)',
+            padding: '14px 16px',
+            borderRadius: '6px'
+          }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 900, textTransform: 'uppercase', color: 'var(--text2)', marginBottom: '4px' }}>
+              📖 JOURNAL & SLEEP
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: getScoreColor(journalSleepPct) }}>
+              {journalSleepPct}%
+            </div>
+          </div>
+
+          <div style={{
+            background: 'var(--bg2, #F8FAFC)',
+            border: 'var(--bw) solid var(--border)',
+            padding: '14px 16px',
+            borderRadius: '6px'
+          }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 900, textTransform: 'uppercase', color: 'var(--text2)', marginBottom: '4px' }}>
+              🎯 GOALS COMPLETED
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: getScoreColor(goalsCompletedPct) }}>
+              {goalsCompletedPct}%
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Top Stat Cards */}
       <div className="grid-4 mb-24">
@@ -329,7 +527,7 @@ const Analytics = () => {
 
       {/* Graphical Charts Section */}
       <div className="grid-2 mb-24">
-        {/* Sleep Hours */}
+        {/* PART 2: SLEEP HOURS LOGGED CHART (MERGED DAILY BARS) */}
         <Card style={{ background: 'var(--bg2)' }}>
           <h3 className="card-title flex flex-center gap-8">
             <span>😴</span> SLEEP HOURS LOGGED
@@ -342,7 +540,7 @@ const Analytics = () => {
           <h3 className="card-title flex flex-center gap-8">
             <span>🏋️</span> GYM WORKOUT FREQUENCY
           </h3>
-          <NeoBarChart data={gymFrequencyData} height={180} maxValOverride={Math.max(1, workouts.length)} />
+          <NeoBarChart data={gymFrequencyData} height={180} maxValOverride={Math.max(1, ...gymFrequencyData.map(d => d.value))} />
         </Card>
 
         {/* Money Spent */}
@@ -358,7 +556,7 @@ const Analytics = () => {
           <h3 className="card-title flex flex-center gap-8">
             <span>✅</span> TASKS COMPLETED
           </h3>
-          <NeoBarChart data={tasksCompletedData} height={180} maxValOverride={Math.max(1, completedTasksCount)} />
+          <NeoBarChart data={tasksCompletedData} height={180} maxValOverride={Math.max(1, ...tasksCompletedData.map(d => d.value))} />
         </Card>
 
         {/* Coding Activity */}
@@ -366,7 +564,7 @@ const Analytics = () => {
           <h3 className="card-title flex flex-center gap-8">
             <span>💻</span> CODING LOGS
           </h3>
-          <NeoBarChart data={codingSolvedData} height={180} maxValOverride={Math.max(1, problems.length)} />
+          <NeoBarChart data={codingSolvedData} height={180} maxValOverride={Math.max(1, ...codingSolvedData.map(d => d.value))} />
         </Card>
 
         {/* Complete Overview Table */}

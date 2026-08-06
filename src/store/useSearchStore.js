@@ -9,6 +9,7 @@ import { useWardrobeStore } from './useWardrobeStore';
 import { useGymStore } from './useGymStore';
 import { useCollegeStore } from './useCollegeStore';
 import { useCalendarStore } from './useCalendarStore';
+import { useTagStore } from './useTagStore';
 
 export const useSearchStore = create((set, get) => ({
   isOpen: false,
@@ -42,39 +43,71 @@ export const useSearchStore = create((set, get) => ({
 
   getIndexedItems: () => {
     const items = [];
+    const tags = useTagStore.getState().tags || [];
+    const tagMap = new Map(tags.map(t => [t.id, t.label]));
 
-    // 1. Tasks
+    // 0. Tags Indexing (Searchable by Tag Name)
+    try {
+      tags.forEach(tg => {
+        const moduleLabel = tg.module === 'goals' ? 'Goals' : tg.module === 'tasks' ? 'Tasks' : 'Tasks & Goals';
+        const route = tg.module === 'goals' ? '/goals' : '/tasks';
+        items.push({
+          id: `tag_${tg.id}`,
+          rawId: tg.id,
+          title: `🏷️ Tag: ${tg.label}`,
+          subtitle: `Filter ${moduleLabel} by ${tg.label} tag`,
+          module: moduleLabel === 'Goals' ? 'Goals' : 'Tasks',
+          moduleKey: 'tags',
+          route,
+          keywords: ['tag', tg.label, tg.type, tg.module].filter(Boolean).join(' ')
+        });
+      });
+    } catch (e) {
+      console.warn('Search index tags error:', e);
+    }
+
+    // 1. Tasks (with Tag search support)
     try {
       const tasks = useTaskStore.getState().tasks || [];
       tasks.forEach((t) => {
+        const taskTagNames = Array.isArray(t.tagIds)
+          ? t.tagIds.map(id => tagMap.get(id)).filter(Boolean)
+          : [];
+        const tagSubtitle = taskTagNames.length > 0 ? ` • Tags: ${taskTagNames.join(', ')}` : '';
+
         items.push({
           id: `task_${t.id}`,
           rawId: t.id,
           title: t.title || 'Untitled Task',
-          subtitle: `Priority: ${t.priority || 'medium'} • Status: ${t.status || 'todo'}`,
+          subtitle: `Priority: ${t.priority || 'medium'} • Status: ${t.status || 'todo'}${tagSubtitle}`,
           module: 'Tasks',
           moduleKey: 'tasks',
           route: '/tasks',
-          keywords: ['task', t.priority, t.status, t.title].filter(Boolean).join(' ')
+          keywords: ['task', t.priority, t.status, t.title, ...taskTagNames].filter(Boolean).join(' ')
         });
       });
     } catch (e) {
       console.warn('Search index tasks error:', e);
     }
 
-    // 2. Goals
+    // 2. Goals (with Tag search support)
     try {
       const goals = useGoalStore.getState().goals || [];
       goals.forEach((g) => {
+        const goalTagNames = Array.isArray(g.tagIds)
+          ? g.tagIds.map(id => tagMap.get(id)).filter(Boolean)
+          : [];
+        const tagSubtitle = goalTagNames.length > 0 ? ` • Tags: ${goalTagNames.join(', ')}` : '';
+
         items.push({
           id: `goal_${g.id}`,
           rawId: g.id,
           title: g.title || 'Untitled Goal',
-          subtitle: `${g.category || 'Goal'} • Progress: ${g.progress || 0}% • ${g.status || 'in_progress'}`,
+          subtitle: `${g.category || 'Goal'} • Progress: ${g.progress || 0}% • ${g.status || 'in_progress'}${tagSubtitle}`,
           module: 'Goals',
           moduleKey: 'goals',
           route: '/goals',
-          keywords: ['goal', g.category, g.status, g.description, g.title].filter(Boolean).join(' ')
+          keywords: ['goal', g.category, g.status, g.description, g.title, ...goalTagNames].filter(Boolean).join(' ')
         });
       });
     } catch (e) {
@@ -120,24 +153,65 @@ export const useSearchStore = create((set, get) => ({
       console.warn('Search index movies error:', e);
     }
 
-    // 5. Expenses
+    // 5. Recent Expenses (Logged Expenses)
     try {
       const expenses = useExpenseStore.getState().expenses || [];
       expenses.forEach((ex) => {
-        const amountDisplay = typeof ex.amount === 'number' ? `$${ex.amount.toFixed(2)}` : ex.amount;
+        const amountDisplay = typeof ex.amount === 'number' ? `₹${ex.amount.toLocaleString()}` : ex.amount;
         items.push({
           id: `expense_${ex.id}`,
           rawId: ex.id,
-          title: ex.title || ex.description || 'Expense',
-          subtitle: `${amountDisplay} • ${ex.category || 'General'} • ${ex.date || ''}`,
+          title: ex.title || ex.description || 'Recent Expense',
+          subtitle: `${amountDisplay} • ${ex.category || 'General'} • Recent Expense`,
           module: 'Expenses',
           moduleKey: 'expenses',
           route: '/expenses',
-          keywords: ['expense', 'budget', 'cost', ex.category, ex.title, ex.description].filter(Boolean).join(' ')
+          keywords: ['expense', 'recent expense', 'logged expense', ex.category, ex.title, ex.description].filter(Boolean).join(' ')
         });
       });
     } catch (e) {
       console.warn('Search index expenses error:', e);
+    }
+
+    // 5b. Monthly Fixed Expenses (Expense Name)
+    try {
+      const recurring = useExpenseStore.getState().recurringExpenses || [];
+      recurring.forEach((r) => {
+        items.push({
+          id: `rec_expense_${r.id}`,
+          rawId: r.id,
+          title: r.name || 'Fixed Expense',
+          subtitle: `₹${Number(r.amount || 0).toLocaleString()} (${r.frequency || 'Monthly'}) • Fixed Expense • ${r.category || 'General'}`,
+          module: 'Expenses',
+          moduleKey: 'expenses',
+          route: '/expenses',
+          keywords: ['fixed expense', 'recurring expense', 'monthly fixed', 'expense name', r.category, r.frequency, r.name].filter(Boolean).join(' ')
+        });
+      });
+    } catch (e) {
+      console.warn('Search index recurring expenses error:', e);
+    }
+
+    // 5c. Savings Goals (Goal Name)
+    try {
+      const savingsGoals = useExpenseStore.getState().savingsGoals || [];
+      savingsGoals.forEach((sg) => {
+        const saved = Number(sg.savedAmount || 0);
+        const target = Number(sg.targetAmount || 1);
+        const pct = Math.min(100, Math.round((saved / target) * 100));
+        items.push({
+          id: `savings_goal_${sg.id}`,
+          rawId: sg.id,
+          title: sg.name || 'Savings Goal',
+          subtitle: `Saved: ₹${saved.toLocaleString()} / ₹${target.toLocaleString()} (${pct}%) • Savings Goal`,
+          module: 'Expenses',
+          moduleKey: 'expenses',
+          route: '/expenses',
+          keywords: ['savings goal', 'savings', 'goal name', sg.name].filter(Boolean).join(' ')
+        });
+      });
+    } catch (e) {
+      console.warn('Search index savings goals error:', e);
     }
 
     // 6. Coding Logs / LeetCode

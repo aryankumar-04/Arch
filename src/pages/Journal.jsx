@@ -28,6 +28,40 @@ export const getTotalSleepHours = (entry) => {
   return nightHours + napHours;
 };
 
+// Mood to color mapping for Heatmap
+export const MOOD_COLORS = {
+  '😄': '#FACC15', // Great / Ecstatic -> Cyber Amber
+  '🙂': '#10B981', // Good -> Emerald Mint
+  '😐': '#3B82F6', // Neutral -> Cobalt Blue
+  '😕': '#F59E0B', // Meh -> Orange
+  '😫': '#EF4444'  // Stressed / Terrible -> Crimson Red
+};
+
+export const getMoodColor = (moodEmoji) => {
+  if (!moodEmoji) return '#FACC15';
+  if (MOOD_COLORS[moodEmoji]) return MOOD_COLORS[moodEmoji];
+  if (moodEmoji.includes('😄') || moodEmoji.includes('😊') || moodEmoji.includes('😃')) return '#FACC15';
+  if (moodEmoji.includes('🙂') || moodEmoji.includes('👍')) return '#10B981';
+  if (moodEmoji.includes('😐') || moodEmoji.includes('😶')) return '#3B82F6';
+  if (moodEmoji.includes('😕') || moodEmoji.includes('🙁')) return '#F59E0B';
+  if (moodEmoji.includes('😫') || moodEmoji.includes('😢') || moodEmoji.includes('😡')) return '#EF4444';
+  return '#FACC15';
+};
+
+const getLast30Days = () => {
+  const days = [];
+  const now = new Date();
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    days.push(`${year}-${month}-${day}`);
+  }
+  return days;
+};
+
 const Journal = () => {
   const { entries, loading, fetchEntries, addEntry, updateEntry, deleteEntry } = useJournalStore();
   const [selectedId, setSelectedId] = useState(null);
@@ -54,6 +88,18 @@ const Journal = () => {
       }
     }
   }, [loading, entries]);
+
+  const last30Days = getLast30Days();
+
+  const handleCellClick = async (dateStr) => {
+    const existing = entries.find(e => e.date === dateStr);
+    if (existing) {
+      setSelectedId(existing.id);
+    } else {
+      const newEntry = await addEntry(dateStr);
+      if (newEntry) setSelectedId(newEntry.id);
+    }
+  };
 
   // Find active selected entry
   const activeEntry = entries.find(e => e.id === selectedId) || entries[0];
@@ -181,63 +227,132 @@ const Journal = () => {
       </div>
 
       <div className="grid-2" style={{ gridTemplateColumns: '280px 1fr', gap: '20px' }}>
-        {/* Sidebar List */}
-        <Card style={{ height: 'fit-content', maxHeight: 'calc(100vh - 160px)', overflowY: 'auto', padding: '16px' }}>
-          <div className="card-title flex flex-between align-center">
-            <span>ENTRIES ({entries.length})</span>
-            <button
-              onClick={() => setIsPastDateModalOpen(true)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 900, color: 'var(--accent)' }}
-            >
-              + PAST DATE
-            </button>
-          </div>
-          {loading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px' }}>
-              <Skeleton type="text" count={4} height="48px" />
+        {/* Left Column (Heatmap + Entries List) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* 30-Day Mood Heatmap Card */}
+          <Card style={{ padding: '16px' }}>
+            <div className="card-title mb-12">
+              📅 30-DAY MOOD HEATMAP
             </div>
-          ) : entries.length === 0 ? (
-            <p className="text-muted" style={{ fontSize: '0.8rem', padding: '16px 0' }}>No entries yet</p>
-          ) : (
-            <>
-              {entries.slice(0, entryLimit).map(entry => (
-                <div
-                  key={entry.id}
-                  onClick={() => setSelectedId(entry.id)}
-                  style={{
-                    padding: '12px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    marginBottom: '8px',
-                    background: activeEntry && activeEntry.id === entry.id ? 'var(--yellow)' : 'var(--bg)',
-                    border: 'var(--bw) solid var(--border)',
-                    boxShadow: activeEntry && activeEntry.id === entry.id ? '3px 3px 0 var(--border)' : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <div className="flex flex-between align-center">
-                    <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>{entry.date}</div>
-                    {entry.date === new Date().toISOString().split('T')[0] && (
-                      <span className="badge badge-green" style={{ fontSize: '0.6rem' }}>TODAY</span>
-                    )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px' }}>
+              {last30Days.map(dateStr => {
+                const entry = entries.find(e => e.date === dateStr);
+                const isSelected = activeEntry && activeEntry.date === dateStr;
+
+                if (!entry) {
+                  return (
+                    <div
+                      key={dateStr}
+                      onClick={() => handleCellClick(dateStr)}
+                      title={`${dateStr} (No entry)`}
+                      style={{
+                        width: '100%',
+                        aspectRatio: '1/1',
+                        background: 'var(--bg)',
+                        border: 'var(--bw) solid var(--border)',
+                        boxShadow: isSelected ? '2px 2px 0 var(--border)' : 'none',
+                        borderRadius: '2px',
+                        display: 'grid',
+                        placeItems: 'center',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        color: 'var(--text3)',
+                        fontWeight: 900,
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      •
+                    </div>
+                  );
+                }
+
+                const bgColor = getMoodColor(entry.mood);
+
+                return (
+                  <div
+                    key={dateStr}
+                    onClick={() => handleCellClick(dateStr)}
+                    title={`${dateStr}: ${entry.mood || 'Logged'}`}
+                    style={{
+                      width: '100%',
+                      aspectRatio: '1/1',
+                      background: bgColor,
+                      border: 'var(--bw) solid var(--border)',
+                      boxShadow: isSelected ? '3px 3px 0 var(--border)' : '1px 1px 0 var(--border)',
+                      borderRadius: '2px',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      transform: isSelected ? 'translate(-1px, -1px)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {entry.mood || '🙂'}
                   </div>
-                  <div className="text-muted truncate" style={{ fontSize: '0.75rem', marginTop: '4px', fontWeight: 600 }}>
-                    {entry.mood || '🙂'} 😴 {getTotalSleepHours(entry).toFixed(1)}h | 💧 {entry.waterGlasses || 0}g | {entry.event || 'No highlight'}
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Sidebar List */}
+          <Card style={{ height: 'fit-content', maxHeight: 'calc(100vh - 360px)', overflowY: 'auto', padding: '16px' }}>
+            <div className="card-title flex flex-between align-center">
+              <span>ENTRIES ({entries.length})</span>
+              <button
+                onClick={() => setIsPastDateModalOpen(true)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 900, color: 'var(--accent)' }}
+              >
+                + PAST DATE
+              </button>
+            </div>
+            {loading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px' }}>
+                <Skeleton type="text" count={4} height="48px" />
+              </div>
+            ) : entries.length === 0 ? (
+              <p className="text-muted" style={{ fontSize: '0.8rem', padding: '16px 0' }}>No entries yet</p>
+            ) : (
+              <>
+                {entries.slice(0, entryLimit).map(entry => (
+                  <div
+                    key={entry.id}
+                    onClick={() => setSelectedId(entry.id)}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      marginBottom: '8px',
+                      background: activeEntry && activeEntry.id === entry.id ? 'var(--yellow)' : 'var(--bg)',
+                      border: 'var(--bw) solid var(--border)',
+                      boxShadow: activeEntry && activeEntry.id === entry.id ? '3px 3px 0 var(--border)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div className="flex flex-between align-center">
+                      <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>{entry.date}</div>
+                      {entry.date === new Date().toISOString().split('T')[0] && (
+                        <span className="badge badge-green" style={{ fontSize: '0.6rem' }}>TODAY</span>
+                      )}
+                    </div>
+                    <div className="text-muted truncate" style={{ fontSize: '0.75rem', marginTop: '4px', fontWeight: 600 }}>
+                      {entry.mood || '🙂'} 😴 {getTotalSleepHours(entry).toFixed(1)}h | 💧 {entry.waterGlasses || 0}g | {entry.event || 'No highlight'}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {entries.length > entryLimit && (
-                <button
-                  className="btn btn-sm btn-ghost width-full mt-8"
-                  onClick={() => setEntryLimit(prev => prev + 20)}
-                  style={{ width: '100%', fontSize: '0.75rem' }}
-                >
-                  + {entries.length - entryLimit} MORE ENTRIES
-                </button>
-              )}
-            </>
-          )}
-        </Card>
+                ))}
+                {entries.length > entryLimit && (
+                  <button
+                    className="btn btn-sm btn-ghost width-full mt-8"
+                    onClick={() => setEntryLimit(prev => prev + 20)}
+                    style={{ width: '100%', fontSize: '0.75rem' }}
+                  >
+                    + {entries.length - entryLimit} MORE ENTRIES
+                  </button>
+                )}
+              </>
+            )}
+          </Card>
+        </div>
 
         {/* Editor Area (ALWAYS OPEN ON VIEW!) */}
         <Card>

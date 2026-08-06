@@ -1,46 +1,54 @@
 import { useEffect, useState } from 'react';
-import { useLeetCodeStore } from '../store';
+import { useCodingStore } from '../store';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
-import StatCard from '../components/common/StatCard';
 import { TrashIcon, PlusIcon } from '../components/common/Icons';
+import { groupItemsBy8Weeks } from '../utils/weekBuckets';
 
 const LeetCode = () => {
-  const { problems, loading, fetchProblems, addProblem, deleteProblem } = useLeetCodeStore();
-  const [newProb, setNewProb] = useState({ title: '', difficulty: 'Easy', notes: '' });
+  const { problems, loading, fetchCodingData, addProblem, deleteProblem } = useCodingStore();
+  
+  const [title, setTitle] = useState('');
+  const [difficulty, setDifficulty] = useState('Easy');
+  const [notes, setNotes] = useState('');
+  const [link, setLink] = useState('');
+
+  const difficulties = ['Easy', 'Medium', 'Hard'];
 
   useEffect(() => {
-    fetchProblems();
-  }, [fetchProblems]);
+    fetchCodingData();
+  }, [fetchCodingData]);
 
-  const handleAdd = (e) => {
+  const handleAddProblem = async (e) => {
     e.preventDefault();
-    if (newProb.title.trim()) {
-      addProblem(newProb);
-      setNewProb({ title: '', difficulty: 'Easy', notes: '' });
-    }
+    if (!title.trim()) return;
+    
+    await addProblem({
+      title: title.trim(),
+      difficulty,
+      notes: link ? `${notes}\nLink: ${link}` : notes,
+      platform: 'LeetCode'
+    });
+    
+    setTitle('');
+    setNotes('');
+    setLink('');
+    setDifficulty('Easy');
   };
-  
-  const easyCount = problems.filter(p => p.difficulty === 'Easy').length;
-  const mediumCount = problems.filter(p => p.difficulty === 'Medium').length;
-  const hardCount = problems.filter(p => p.difficulty === 'Hard').length;
+
+  const codingFreqData = groupItemsBy8Weeks(problems, p => p.createdAt || p.date);
+  const maxCodingVal = Math.max(1, ...codingFreqData.map(d => d.value));
 
   return (
     <div>
       <div className="page-header">
-        <h1>💻 LeetCode Tracker</h1>
-      </div>
-      
-      <div className="grid-3 mb-24">
-        <StatCard value={`EASY: ${easyCount}`} label="Easy Solved" bg="#ecfdf5" color="var(--green)" />
-        <StatCard value={`MEDIUM: ${mediumCount}`} label="Medium Solved" bg="#fffbeb" color="var(--orange)" />
-        <StatCard value={`HARD: ${hardCount}`} label="Hard Solved" bg="#fef2f2" color="var(--red)" />
+        <h1>👨‍💻 LeetCode Tracker</h1>
       </div>
 
-      {/* LeetCode Progress & Weekly Frequency Graph */}
+      {/* LeetCode Activity Chart */}
       <Card className="mb-24" style={{ background: 'var(--bg2)' }}>
         <h3 className="card-title flex flex-center gap-8">
-          <span>💻</span> LEETCODE SOLVED (WEEKLY PROGRESS)
+          <span>📊</span> PROBLEMS SOLVED FREQUENCY
         </h3>
         <div style={{ position: 'relative', width: '100%', padding: '16px 12px 8px 36px' }}>
           <div style={{
@@ -57,8 +65,8 @@ const LeetCode = () => {
             textAlign: 'right',
             width: '24px'
           }}>
-            <span>{Math.max(1, problems.length)}</span>
-            <span>{Math.round(Math.max(1, problems.length) / 2)}</span>
+            <span>{maxCodingVal}</span>
+            <span>{Math.round(maxCodingVal / 2)}</span>
             <span>0</span>
           </div>
           <div style={{
@@ -68,7 +76,7 @@ const LeetCode = () => {
             position: 'relative',
             display: 'flex',
             alignItems: 'flex-end',
-            justifyContent: 'space-around',
+            justify: 'space-around',
             padding: '0 12px'
           }}>
             {[0, 50].map(pct => (
@@ -81,29 +89,33 @@ const LeetCode = () => {
                 pointerEvents: 'none'
               }} />
             ))}
-            {['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'].map((w, idx) => {
-              const val = problems.length > 0 ? (idx === 7 ? problems.length : Math.floor((problems.length * (idx + 1)) / 8)) : 0;
-              const maxVal = Math.max(1, problems.length);
-              const heightPct = Math.min(100, Math.max(4, (val / maxVal) * 100));
+            {codingFreqData.map((d, i) => {
+              const heightPct = maxCodingVal > 0 && d.value > 0 ? Math.min(100, Math.max(6, (d.value / maxCodingVal) * 100)) : 0;
               return (
-                <div key={w} style={{
+                <div key={i} style={{
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   height: '100%',
-                  justifyContent: 'flex-end',
+                  justify: 'flex-end',
                   flex: 1,
                   maxWidth: '36px',
                   zIndex: 2
                 }}>
+                  {d.value > 0 && (
+                    <div style={{ fontSize: '0.68rem', fontWeight: 900, color: 'var(--text)', marginBottom: '2px' }}>
+                      {d.value}
+                    </div>
+                  )}
                   <div 
-                    title={`${w}: ${val} solved`}
+                    title={`${d.label}: ${d.value} solved`}
                     style={{
                       width: '100%',
                       height: `${heightPct}%`,
-                      background: val > 0 ? 'var(--orange)' : 'var(--bg4)',
-                      border: 'var(--bw) solid var(--border)',
-                      borderBottom: 'none'
+                      background: d.value > 0 ? 'var(--orange)' : 'transparent',
+                      border: d.value > 0 ? 'var(--bw) solid var(--border)' : 'none',
+                      borderBottom: 'none',
+                      transition: 'height 0.3s ease'
                     }} 
                   />
                 </div>
@@ -111,68 +123,97 @@ const LeetCode = () => {
             })}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '8px', paddingLeft: '12px', paddingRight: '12px' }}>
-            {['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'].map((w) => (
-              <span key={w} style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text2)', textAlign: 'center', flex: 1 }}>
-                {w}
+            {codingFreqData.map((d, i) => (
+              <span key={i} style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text2)', textAlign: 'center', flex: 1 }}>
+                {d.label}
               </span>
             ))}
           </div>
         </div>
       </Card>
-      
+
       <Card className="mb-24">
-        <form onSubmit={handleAdd} className="form-row flex-wrap">
-          <input 
-            className="form-input" 
-            type="text" 
-            placeholder="Problem Title (e.g. Two Sum)" 
-            value={newProb.title} 
-            onChange={e => setNewProb({...newProb, title: e.target.value})} 
-            required 
-          />
-          <select 
-            className="form-select" 
-            style={{ maxWidth: '150px' }} 
-            value={newProb.difficulty} 
-            onChange={e => setNewProb({...newProb, difficulty: e.target.value})}
-          >
-            <option value="Easy">Easy</option>
-            <option value="Medium">Medium</option>
-            <option value="Hard">Hard</option>
-          </select>
-          <input 
-            className="form-input" 
-            type="text" 
-            placeholder="Notes / Approach (Optional)" 
-            value={newProb.notes} 
-            onChange={e => setNewProb({...newProb, notes: e.target.value})} 
-          />
-          <Button type="submit" variant="primary" icon={<PlusIcon />}>
-            Log Problem
+        <form onSubmit={handleAddProblem} className="flex" style={{ flexDirection: 'column', gap: '16px' }}>
+          <div style={{ fontWeight: 900, fontSize: '1.2rem' }}>Log a LeetCode Problem</div>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Problem Title / Number</label>
+              <input type="text" className="form-input" placeholder="e.g. 1. Two Sum" value={title} onChange={e => setTitle(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label>Problem URL (Optional)</label>
+              <input type="url" className="form-input" placeholder="https://leetcode.com/problems/..." value={link} onChange={e => setLink(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Difficulty</label>
+            <div className="flex gap-8">
+              {difficulties.map(d => (
+                <Button
+                  key={d}
+                  type="button"
+                  size="sm"
+                  variant={difficulty === d ? (d === 'Easy' ? 'yellow' : d === 'Medium' ? 'primary' : 'danger') : 'ghost'}
+                  onClick={() => setDifficulty(d)}
+                >
+                  {d}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Notes / Approach</label>
+            <textarea 
+              className="form-textarea"
+              placeholder="e.g. Used HashMap for O(N) time complexity." 
+              value={notes} 
+              onChange={e => setNotes(e.target.value)} 
+            />
+          </div>
+
+          <Button type="submit" variant="primary" style={{ alignSelf: 'flex-start' }} icon={<PlusIcon />}>
+            Save Problem Log
           </Button>
         </form>
       </Card>
+
+      <h2 style={{ fontSize: '1.2rem', fontWeight: 900, marginBottom: '16px' }}>Solved Problems</h2>
       
-      <div className="flex" style={{ flexDirection: 'column', gap: '12px' }}>
+      <div className="dash-grid">
         {loading ? (
-          <div className="empty-state">Loading problems...</div>
+          <div className="empty-state">Loading problem logs...</div>
         ) : problems.length === 0 ? (
-          <div className="empty-state">No problems logged yet. Time to grind!</div>
+          <div className="empty-state">No LeetCode problems logged yet. Time to solve some algorithms!</div>
         ) : (
-          problems.map(p => {
-            const diffColor = p.difficulty === 'Easy' ? 'var(--green)' : p.difficulty === 'Medium' ? 'var(--orange)' : 'var(--red)';
-            return (
-              <Card key={p.id} className="flex flex-between flex-center" style={{ borderLeft: `6px solid ${diffColor}` }}>
-                <div>
-                  <h3 style={{ margin: 0, fontWeight: 900 }}>{p.title}</h3>
-                  {p.notes && <div className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 700, marginTop: '4px' }}>{p.notes}</div>}
+          problems.map(prob => (
+            <Card key={prob.id} style={{ position: 'relative', background: 'var(--bg2)' }}>
+              <button 
+                className="btn-icon"
+                onClick={() => deleteProblem(prob.id)}
+                style={{ position: 'absolute', top: '12px', right: '12px' }}
+                title="Delete Log"
+              >
+                <TrashIcon size={14} />
+              </button>
+
+              <span className={`badge badge-${prob.difficulty === 'Easy' ? 'green' : prob.difficulty === 'Medium' ? 'yellow' : 'red'}`} style={{ marginBottom: '8px' }}>
+                {prob.difficulty}
+              </span>
+
+              <h3 style={{ margin: '0 0 12px 0', paddingRight: '40px', fontWeight: 900, fontSize: '1.2rem' }}>
+                {prob.title}
+              </h3>
+
+              {prob.notes && (
+                <div className="card" style={{ padding: '12px', background: 'var(--bg)', fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
+                  {prob.notes}
                 </div>
-                <button className="btn-icon" onClick={() => deleteProblem(p.id)}>
-                  <TrashIcon size={14} />
-                </button>
-              </Card>
-            );
-          })
+              )}
+            </Card>
+          ))
         )}
       </div>
     </div>
