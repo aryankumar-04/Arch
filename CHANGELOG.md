@@ -2,6 +2,12 @@
 
 All notable changes to the **ARCH** personal operating system dashboard will be documented in this file.
 
+## [1.8.3] - 2026-08-09
+
+### 🎨 Theme-Adaptive Logo & Favicon System
+- **High-Contrast Dynamic Favicons**: Implemented dynamic browser & system theme listener (`window.matchMedia('(prefers-color-scheme: dark)')`) for website favicons. Automatically renders `/logo-dark.png` on Light browser tab headers and `/logo-light.png` on Dark browser tab headers for optimal legibility.
+- **GitHub README Header Badge**: Updated `README.md` to use GitHub's native theme-adaptive `<picture>` element with `<source media="(prefers-color-scheme)">` rules for crisp rendering in both Light and Dark GitHub modes.
+
 ## [1.8.2] - 2026-08-09
 
 ### 🎨 Theming & Visual Consistency ("Cyber Black")
