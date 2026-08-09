@@ -1,6 +1,10 @@
 <div align="center">
 
-  <img src="./public/favicon.svg" alt="Arch Logo" width="100" height="100" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./public/logo-light.png">
+    <source media="(prefers-color-scheme: light)" srcset="./public/logo-dark.png">
+    <img src="./public/logo-dark.png" alt="Arch Logo" width="100" height="100" />
+  </picture>
 
   # ARCH
 
