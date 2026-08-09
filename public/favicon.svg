@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <style>
-    .favicon-light { display: block; }
-    .favicon-dark { display: none; }
+    .favicon-light-bg { display: block; }
+    .favicon-dark-bg { display: none; }
     @media (prefers-color-scheme: dark) {
-      .favicon-light { display: none; }
-      .favicon-dark { display: block; }
+      .favicon-light-bg { display: none; }
+      .favicon-dark-bg { display: block; }
     }
   </style>
-  <image class="favicon-light" href="/logo-light.png" width="512" height="512" />
-  <image class="favicon-dark" href="/logo-dark.png" width="512" height="512" />
+  <image class="favicon-light-bg" href="/logo-dark.png" width="512" height="512" />
+  <image class="favicon-dark-bg" href="/logo-light.png" width="512" height="512" />
 </svg>

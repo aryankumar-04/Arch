@@ -11,7 +11,7 @@
           var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
           var link = document.getElementById('app-favicon');
           if (link) {
-            var targetHref = isDark ? '/logo-dark.png' : '/logo-light.png';
+            var targetHref = isDark ? '/logo-light.png' : '/logo-dark.png';
             if (link.getAttribute('href') !== targetHref) {
               link.setAttribute('href', targetHref);
             }
