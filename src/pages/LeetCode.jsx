@@ -72,7 +72,7 @@ const LeetCode = () => {
           <div style={{
             height: '160px',
             border: 'var(--bw) solid var(--border)',
-            background: '#FFF',
+            background: 'var(--bg)',
             position: 'relative',
             display: 'flex',
             alignItems: 'flex-end',

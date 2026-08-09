@@ -213,25 +213,21 @@ const Wardrobe = () => {
         <StatCard
           value={totalItems}
           label="TOTAL ITEMS"
-          bg="#FFFFFF"
           color="var(--text)"
         />
         <StatCard
           value={favoritesCount}
           label="FAVORITES"
-          bg="#FFFFFF"
           color="var(--text)"
         />
         <StatCard
           value={outfitsCount}
           label="OUTFITS"
-          bg="#FFFFFF"
           color="var(--text)"
         />
         <StatCard
           value={mostWorn}
           label="MOST WORN"
-          bg="#FFFFFF"
           color="var(--text)"
         />
       </div>

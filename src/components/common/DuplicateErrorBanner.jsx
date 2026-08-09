@@ -20,7 +20,7 @@ const DuplicateErrorBanner = ({ title, message, onClose, autoDismissMs = 4000 })
     <div
       className="duplicate-error-banner"
       style={{
-        background: '#FFFFFF',
+        background: 'var(--bg2)',
         border: '2.5px solid var(--border, #0F0F0F)',
         boxShadow: '4px 4px 0px var(--border, #0F0F0F)',
         padding: '12px 14px',

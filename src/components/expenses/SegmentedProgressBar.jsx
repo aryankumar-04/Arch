@@ -1,14 +1,38 @@
 import React from 'react';
 
 const SegmentedProgressBar = ({ loggedAmount = 0, fixedAmount = 0, savingsAmount = 0, capValue = 0 }) => {
-  const totalCombined = loggedAmount + fixedAmount + savingsAmount;
-  const overallPercent = capValue > 0 ? Math.round((totalCombined / capValue) * 100) : 0;
-  const isOverBudget = capValue > 0 && overallPercent > 100;
+  const safeLogged = Math.max(0, Number(loggedAmount) || 0);
+  const safeFixed = Math.max(0, Number(fixedAmount) || 0);
+  const safeSavings = Math.max(0, Number(savingsAmount) || 0);
 
-  // Calculate width percentage for each segment relative to capValue
-  const loggedPct = capValue > 0 ? Math.min(100, Math.max(0, (loggedAmount / capValue) * 100)) : 0;
-  const fixedPct = capValue > 0 ? Math.min(100 - loggedPct, Math.max(0, (fixedAmount / capValue) * 100)) : 0;
-  const savingsPct = capValue > 0 ? Math.min(100 - loggedPct - fixedPct, Math.max(0, (savingsAmount / capValue) * 100)) : 0;
+  // Total Spent = Logged + Fixed (Paid) ONLY (Savings is allocated, not spent)
+  const actualSpent = safeLogged + safeFixed;
+  const totalCombined = actualSpent + safeSavings;
+  const overallPercent = capValue > 0 ? Math.round((actualSpent / capValue) * 100) : 0;
+  const isOverBudget = capValue > 0 && actualSpent > capValue;
+
+  // Calculate proportional width percentage for each segment relative to capValue
+  let loggedPct = 0;
+  let fixedPct = 0;
+  let savingsPct = 0;
+
+  if (capValue > 0 && totalCombined > 0) {
+    if (totalCombined > capValue) {
+      // Scale proportionally to fill 100% of the bar track when total spending exceeds cap limit
+      loggedPct = (safeLogged / totalCombined) * 100;
+      fixedPct = (safeFixed / totalCombined) * 100;
+      savingsPct = (safeSavings / totalCombined) * 100;
+    } else {
+      loggedPct = (safeLogged / capValue) * 100;
+      fixedPct = (safeFixed / capValue) * 100;
+      savingsPct = (safeSavings / capValue) * 100;
+    }
+  }
+
+  // Exact color definitions matching requirement
+  const COLOR_LOGGED = 'var(--budget-logged, #4F8CC9)';
+  const COLOR_FIXED = 'var(--budget-fixed, #D69A4A)';
+  const COLOR_SAVINGS = 'var(--budget-savings, #58A77B)';
 
   return (
     <div style={{ marginTop: '8px' }}>
@@ -16,42 +40,42 @@ const SegmentedProgressBar = ({ loggedAmount = 0, fixedAmount = 0, savingsAmount
       <div style={{
         width: '100%',
         height: '18px',
-        background: 'var(--bg4, #E2E8F0)',
+        background: 'var(--bg4, #27272A)',
         border: 'var(--bw) solid var(--border)',
-        borderRadius: '4px',
+        borderRadius: '6px',
         overflow: 'hidden',
-        padding: '1px',
+        padding: '0',
         display: 'flex'
       }}>
         {loggedPct > 0 && (
           <div
-            title={`Logged Expenses: ₹${loggedAmount.toLocaleString()}`}
+            title={`Logged Expenses: ₹${safeLogged.toLocaleString()}`}
             style={{
               width: `${loggedPct}%`,
               height: '100%',
-              background: 'var(--green, #10B981)',
+              background: COLOR_LOGGED,
               transition: 'width 0.4s ease'
             }}
           />
         )}
         {fixedPct > 0 && (
           <div
-            title={`Monthly Fixed Cost: ₹${fixedAmount.toLocaleString()}`}
+            title={`Monthly Fixed Cost: ₹${safeFixed.toLocaleString()}`}
             style={{
               width: `${fixedPct}%`,
               height: '100%',
-              background: 'var(--accent, #2563EB)',
+              background: COLOR_FIXED,
               transition: 'width 0.4s ease'
             }}
           />
         )}
         {savingsPct > 0 && (
           <div
-            title={`Savings Added This Month: ₹${savingsAmount.toLocaleString()}`}
+            title={`Savings Added This Month: ₹${safeSavings.toLocaleString()}`}
             style={{
               width: `${savingsPct}%`,
               height: '100%',
-              background: 'var(--purple, #8B5CF6)',
+              background: COLOR_SAVINGS,
               transition: 'width 0.4s ease'
             }}
           />
@@ -65,22 +89,22 @@ const SegmentedProgressBar = ({ loggedAmount = 0, fixedAmount = 0, savingsAmount
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '12px',
-        marginTop: '8px',
-        fontSize: '0.75rem',
+        marginTop: '10px',
+        fontSize: '0.78rem',
         fontWeight: 800
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--green, #10B981)', display: 'inline-block' }} />
-            <span>Logged: ₹{Math.round(loggedAmount).toLocaleString()}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: COLOR_LOGGED, display: 'inline-block' }} />
+            <span style={{ color: 'var(--text)' }}>Logged: ₹{Math.round(safeLogged).toLocaleString()}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent, #2563EB)', display: 'inline-block' }} />
-            <span>Fixed: ₹{Math.round(fixedAmount).toLocaleString()}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: COLOR_FIXED, display: 'inline-block' }} />
+            <span style={{ color: 'var(--text)' }}>Fixed: ₹{Math.round(safeFixed).toLocaleString()}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--purple, #8B5CF6)', display: 'inline-block' }} />
-            <span>Savings: ₹{Math.round(savingsAmount).toLocaleString()}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: COLOR_SAVINGS, display: 'inline-block' }} />
+            <span style={{ color: 'var(--text)' }}>Savings: ₹{Math.round(safeSavings).toLocaleString()}</span>
           </div>
         </div>
 

@@ -214,20 +214,17 @@ const Goals = () => {
         <StatCard
           value={totalGoals}
           label="TOTAL GOALS"
-          bg="#FFFFFF"
           color="var(--text)"
         />
         <StatCard
           value={completedGoals}
           label="COMPLETED"
-          bg="#FFFFFF"
-          color="#10B981"
+          color="var(--green)"
         />
         <StatCard
           value={inProgressGoals}
           label="IN PROGRESS"
-          bg="#FFFFFF"
-          color="#D97706"
+          color="var(--yellow)"
         />
       </div>
 

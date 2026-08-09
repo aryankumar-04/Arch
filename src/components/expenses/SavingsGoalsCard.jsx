@@ -46,7 +46,7 @@ const GoalActionMenu = ({ goal, onAddToSavings, onEdit, onDelete }) => {
             top: '100%',
             right: 0,
             zIndex: 100,
-            background: '#FFFFFF',
+            background: 'var(--bg2)',
             border: 'var(--bw) solid var(--border)',
             boxShadow: '3px 3px 0px var(--border)',
             borderRadius: '4px',
@@ -115,7 +115,7 @@ const SavingsGoalsCard = ({ savingsGoals = [], onAddGoalClick, onAddToSavingsCli
   const totalSavedAcrossGoals = savingsGoals.reduce((sum, g) => sum + Number(g.savedAmount || 0), 0);
 
   return (
-    <Card hover={false} style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Card style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Card Header */}
       <div style={{
         padding: '16px 20px',
@@ -149,7 +149,8 @@ const SavingsGoalsCard = ({ savingsGoals = [], onAddGoalClick, onAddToSavingsCli
           savingsGoals.map(goal => {
             const saved = Number(goal.savedAmount || 0);
             const target = Number(goal.targetAmount || 1);
-            const pct = Math.min(100, Math.round((saved / target) * 100));
+            const rawPct = target > 0 ? Math.round((saved / target) * 100) : 0;
+            const fillPct = Math.min(100, Math.max(0, rawPct));
             const iconMeta = getExpenseIconSymbol(goal.name, 'Goal', goal.iconUrl);
 
             return (
@@ -192,8 +193,8 @@ const SavingsGoalsCard = ({ savingsGoals = [], onAddGoalClick, onAddToSavingsCli
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontWeight: 900, fontSize: '0.88rem', color: 'var(--purple, #8B5CF6)' }}>
-                      {pct}%
+                    <span style={{ fontWeight: 900, fontSize: '0.88rem', color: rawPct >= 100 ? 'var(--budget-savings, #58A77B)' : 'var(--purple, #8B5CF6)' }}>
+                      {rawPct}%
                     </span>
                     <GoalActionMenu
                       goal={goal}
@@ -215,9 +216,9 @@ const SavingsGoalsCard = ({ savingsGoals = [], onAddGoalClick, onAddToSavingsCli
                   marginBottom: '6px'
                 }}>
                   <div style={{
-                    width: `${pct}%`,
+                    width: `${fillPct}%`,
                     height: '100%',
-                    background: 'var(--purple, #8B5CF6)',
+                    background: rawPct >= 100 ? 'var(--budget-savings, #58A77B)' : 'var(--purple, #8B5CF6)',
                     transition: 'width 0.3s ease'
                   }} />
                 </div>

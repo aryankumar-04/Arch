@@ -2,6 +2,33 @@
 
 All notable changes to the **ARCH** personal operating system dashboard will be documented in this file.
 
+## [1.8.2] - 2026-08-09
+
+### 🎨 Theming & Visual Consistency ("Cyber Black")
+- **Dark Theme Inputs & Dropdowns**: Restyled text inputs, search fields, selects, and textareas across Expenses, Coding Hub, Journal, and Analytics to use dark background variables (`var(--bg2)`, `var(--bg4)`) with high-contrast text (`var(--text)`) and distinct placeholder colors (`var(--text2)`).
+- **Stat Cards & Charts**: Restyled total spent summary card, budget cap cards, and chart containers to match Cyber Black tokens.
+- **Card Hover Animations**: Enabled signature `.card-hover` tactile squish/bounce effect across all card islands in Expenses and Coding Hub tabs.
+
+### 💰 Expenses & Budget Tracker Overhaul
+- **Accounting Model Overhaul**: Separated *Spent Money* (`Logged Expenses + Paid Fixed Costs`) from *Allocated Money* (`Savings Contributions`). Savings contributions no longer artificially inflate Total Amount Spent.
+- **Segmented Budget Cap Bar**: Upgraded progress bar into 3 proportional visual segments: Logged (`#4F8CC9`), Fixed (`#D69A4A`), and Savings (`#58A77B`), with accurate `% Spent` calculations against the monthly limit.
+- **Fixed Expense Cycle Model**: Updated recurring expenses to support calendar cycle tracking (`Paid` vs `Overdue`) with automatic status reset and rollover when new billing cycles begin.
+- **Input & Budget Validation**: Added strict validation for non-positive or empty expense entries (`amount <= 0`) and zero/blank budget caps, preventing division-by-zero or `NaN` errors.
+
+### 😴 Daily Journal & Analytics Sleep Tracking
+- **24-Hour Sleep Validation**: Real-time validation blocks saving entries if combined `Night Sleep + Evening Nap` exceeds 24.0 hours, displaying a `DuplicateErrorBanner` with title `"SLEEP DURATION EXCEEDED"`.
+- **Analytics Chart Baseline & Scaling**: Fixed flexbox alignment in `NeoBarChart` to anchor bars to the 0 baseline. Implemented dynamic auto-scaling with 15% headroom and rounded tick intervals.
+
+### ⚡ Navigation & Modals
+- **Direction-Aware Tab Transitions**: Implemented top-to-bottom and bottom-to-top vertical slide animations based on sidebar tab position index with `cubic-bezier(0.16, 1, 0.3, 1)` easing.
+- **Tab Auto-Scroll**: Opening a new tab automatically resets the main container scroll position to the top (`scrollTop = 0`).
+- **Modal Positioning & Viewport Portals**: Upgraded `Modal`, `GlobalSearchModal`, and `Calendar` modals to use React `createPortal` targeting `document.body`, ensuring perfect viewport centering and clean semi-transparent dark backdrop overlays.
+
+### 🔒 Security & Data Integrity
+- **User-Scoped Path Isolation**: Verified all Firestore reads and writes remain strictly scoped to `/users/{userId}/...`.
+- **Zero Exposed Secrets**: Confirmed all API keys and config values load securely via `import.meta.env`.
+- **Production Build Clean**: Production bundle built cleanly in 750ms with 0 warnings or errors.
+
 ## [1.0.5] - 2026-08-04
 
 ### 🔒 Security & Environment

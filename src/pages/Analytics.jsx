@@ -15,8 +15,27 @@ import { groupItemsBy8Weeks, groupExpensesBy8Weeks, getPast8WeeksBuckets } from 
 // Custom Neo-Brutalist Bar Chart Component with Custom Tooltip Support
 const NeoBarChart = ({ data, labelKey = 'label', valueKey = 'value', height = 200, maxValOverride }) => {
   const values = data.map(d => Number(d[valueKey]) || 0);
-  const maxVal = maxValOverride || Math.max(...values, 1);
-  const yTicks = [maxVal, Math.round(maxVal * 0.75), Math.round(maxVal * 0.5), Math.round(maxVal * 0.25), 0];
+  const highestVal = Math.max(...values, 0);
+
+  let maxVal = maxValOverride;
+  if (!maxVal || maxVal <= 0) {
+    if (highestVal === 0) {
+      maxVal = 8;
+    } else {
+      // Add ~15% headroom and round up to next multiple of 4 for clean, evenly spaced integer ticks
+      const headroomVal = Math.ceil(highestVal * 1.15);
+      maxVal = Math.max(4, Math.ceil(headroomVal / 4) * 4);
+    }
+  }
+
+  const step = maxVal / 4;
+  const yTicks = [
+    maxVal,
+    Math.round((maxVal - step) * 10) / 10,
+    Math.round((maxVal - step * 2) * 10) / 10,
+    Math.round((maxVal - step * 3) * 10) / 10,
+    0
+  ];
 
   return (
     <div style={{ position: 'relative', width: '100%', padding: '16px 12px 8px 36px' }}>
@@ -44,7 +63,7 @@ const NeoBarChart = ({ data, labelKey = 'label', valueKey = 'value', height = 20
       <div style={{
         height: `${height}px`,
         border: 'var(--bw) solid var(--border)',
-        background: '#FFF',
+        background: 'var(--bg)',
         position: 'relative',
         display: 'flex',
         alignItems: 'flex-end',
@@ -66,7 +85,7 @@ const NeoBarChart = ({ data, labelKey = 'label', valueKey = 'value', height = 20
         {/* Bars */}
         {data.map((d, i) => {
           const val = Number(d[valueKey]) || 0;
-          const heightPct = maxVal > 0 && val > 0 ? Math.min(100, Math.max(6, (val / maxVal) * 100)) : 0;
+          const heightPct = maxVal > 0 && val > 0 ? Math.min(100, (val / maxVal) * 100) : 0;
           const tooltipText = d.tooltip || `${d[labelKey]}: ${val}`;
 
           return (
@@ -75,7 +94,7 @@ const NeoBarChart = ({ data, labelKey = 'label', valueKey = 'value', height = 20
               flexDirection: 'column',
               alignItems: 'center',
               height: '100%',
-              justify: 'flex-end',
+              justifyContent: 'flex-end',
               flex: 1,
               maxWidth: '36px',
               zIndex: 2
@@ -170,7 +189,7 @@ const NeoLineChart = ({ data, height = 200, lineColor = '#EF4444' }) => {
       <div style={{
         height: `${height}px`,
         border: 'var(--bw) solid var(--border)',
-        background: '#FFF',
+        background: 'var(--bg)',
         position: 'relative'
       }}>
         <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
@@ -423,7 +442,7 @@ const Analytics = () => {
       </div>
 
       {/* PART 1: LIFE BALANCE INDEX SUMMARY BANNER */}
-      <Card className="mb-24" style={{ background: '#FFF', position: 'relative', borderLeft: '6px solid var(--accent, #2563EB)' }}>
+      <Card className="mb-24" style={{ background: 'var(--bg2)', position: 'relative', borderLeft: '6px solid var(--accent, #2563EB)' }}>
         <div style={{
           fontSize: '0.88rem',
           fontWeight: 900,
@@ -441,7 +460,7 @@ const Analytics = () => {
 
         <div className="grid-4" style={{ gap: '16px' }}>
           <div style={{
-            background: 'var(--bg2, #F8FAFC)',
+            background: 'var(--bg4)',
             border: 'var(--bw) solid var(--border)',
             padding: '14px 16px',
             borderRadius: '6px'
@@ -455,7 +474,7 @@ const Analytics = () => {
           </div>
 
           <div style={{
-            background: 'var(--bg2, #F8FAFC)',
+            background: 'var(--bg4)',
             border: 'var(--bw) solid var(--border)',
             padding: '14px 16px',
             borderRadius: '6px'
@@ -469,7 +488,7 @@ const Analytics = () => {
           </div>
 
           <div style={{
-            background: 'var(--bg2, #F8FAFC)',
+            background: 'var(--bg4)',
             border: 'var(--bw) solid var(--border)',
             padding: '14px 16px',
             borderRadius: '6px'
@@ -483,7 +502,7 @@ const Analytics = () => {
           </div>
 
           <div style={{
-            background: 'var(--bg2, #F8FAFC)',
+            background: 'var(--bg4)',
             border: 'var(--bw) solid var(--border)',
             padding: '14px 16px',
             borderRadius: '6px'
@@ -500,26 +519,26 @@ const Analytics = () => {
 
       {/* Top Stat Cards */}
       <div className="grid-4 mb-24">
-        <Card className="stat-card" style={{ background: '#FFF' }}>
+        <Card className="stat-card" style={{ background: 'var(--bg2)' }}>
           <div className="card-title">PRODUCTIVITY SCORE</div>
           <div className="card-value" style={{ color: 'var(--green)' }}>
             {productivityScore} <span style={{ fontSize: '1rem', color: 'var(--text3)' }}>/100</span>
           </div>
         </Card>
 
-        <Card className="stat-card" style={{ background: '#FFF' }}>
+        <Card className="stat-card" style={{ background: 'var(--bg2)' }}>
           <div className="card-title">JOURNAL STREAK</div>
           <div className="card-value flex flex-center" style={{ justifyContent: 'center', gap: '4px' }}>
             {journalStreak} <span style={{ fontSize: '0.9rem', fontWeight: 800 }}>DAYS</span>
           </div>
         </Card>
 
-        <Card className="stat-card" style={{ background: '#FFF' }}>
+        <Card className="stat-card" style={{ background: 'var(--bg2)' }}>
           <div className="card-title">TASKS COMPLETED</div>
           <div className="card-value" style={{ color: 'var(--accent)' }}>{completedTasksCount}</div>
         </Card>
 
-        <Card className="stat-card" style={{ background: '#FFF' }}>
+        <Card className="stat-card" style={{ background: 'var(--bg2)' }}>
           <div className="card-title">MOVIES WATCHED</div>
           <div className="card-value" style={{ color: 'var(--purple)' }}>{watchedMoviesCount}</div>
         </Card>
@@ -532,7 +551,7 @@ const Analytics = () => {
           <h3 className="card-title flex flex-center gap-8">
             <span>😴</span> SLEEP HOURS LOGGED
           </h3>
-          <NeoBarChart data={sleepData} height={180} maxValOverride={10} />
+          <NeoBarChart data={sleepData} height={180} />
         </Card>
 
         {/* Gym Frequency */}

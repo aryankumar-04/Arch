@@ -58,10 +58,10 @@ const Coding = () => {
 
       {/* Metrics Row */}
       <div className="grid-4 mb-24">
-        <StatCard value={totalCount} label="TOTAL LOGS" bg="#FFFFFF" color="var(--text)" />
-        <StatCard value={easyCount} label="EASY SOLVED" bg="#ecfdf5" color="var(--green)" />
-        <StatCard value={mediumCount} label="MEDIUM SOLVED" bg="#fffbeb" color="var(--orange)" />
-        <StatCard value={hardCount} label="HARD SOLVED" bg="#fef2f2" color="var(--red)" />
+        <StatCard value={totalCount} label="TOTAL LOGS" color="var(--text)" />
+        <StatCard value={easyCount} label="EASY SOLVED" color="var(--green)" />
+        <StatCard value={mediumCount} label="MEDIUM SOLVED" color="var(--orange)" />
+        <StatCard value={hardCount} label="HARD SOLVED" color="var(--red)" />
       </div>
 
       {/* Heatmap & Activity Breakdown Row */}

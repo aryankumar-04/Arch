@@ -46,7 +46,7 @@ const ActionMenu = ({ item, isPaid, onTogglePaid, onEdit, onDelete }) => {
             top: '100%',
             right: 0,
             zIndex: 100,
-            background: '#FFFFFF',
+            background: 'var(--bg2)',
             border: 'var(--bw) solid var(--border)',
             boxShadow: '3px 3px 0px var(--border)',
             borderRadius: '4px',
@@ -118,7 +118,7 @@ const RecurringExpensesCard = ({ recurringExpenses = [], onAddClick, onEditClick
   );
 
   return (
-    <Card hover={false} style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Card style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Card Header */}
       <div style={{
         padding: '16px 20px',

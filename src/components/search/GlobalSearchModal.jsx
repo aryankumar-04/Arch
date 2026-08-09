@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useCallback, useTransition } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useSearchStore } from '../../store/useSearchStore';
 import { 
@@ -164,7 +165,7 @@ const GlobalSearchModal = () => {
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div 
       className="modal-overlay search-modal-overlay" 
       onClick={closeSearch}
@@ -255,7 +256,8 @@ const GlobalSearchModal = () => {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

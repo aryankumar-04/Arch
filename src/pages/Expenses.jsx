@@ -125,21 +125,32 @@ const Expenses = () => {
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    if (newExp.title && newExp.amount) {
-      setIsSubmitting(true);
-      try {
-        await addExpense(newExp);
-        setNewExp({ title: '', amount: '', category: 'Food' });
-      } finally {
-        setIsSubmitting(false);
-      }
+    const cleanTitle = (newExp.title || '').trim();
+    const parsedAmount = Number(newExp.amount);
+
+    if (!cleanTitle || isNaN(parsedAmount) || parsedAmount <= 0) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await addExpense({
+        ...newExp,
+        title: cleanTitle,
+        amount: parsedAmount
+      });
+      setNewExp({ title: '', amount: '', category: 'Food' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleCapBlur = () => {
     const num = Number(capInput);
-    if (!isNaN(num)) {
+    if (!isNaN(num) && num >= 0) {
       setMonthlyBudgetCap(num);
+    } else {
+      setCapInput(monthlyBudgetCap ? String(monthlyBudgetCap) : '');
     }
   };
 
@@ -187,10 +198,10 @@ const Expenses = () => {
     return sum + monthContribs;
   }, 0);
 
-  // Combined Total Spent = Logged Expenses + Paid Fixed Costs + Savings Added
-  const totalMonthSpent = Math.round(monthlyLoggedSpent + monthlyFixedPaid + monthlySavingsAdded);
+  // Total Amount Spent (This Month) = Logged Expenses + Paid Fixed Costs ONLY (Savings is allocated, not spent)
+  const totalMonthSpent = Math.round(monthlyLoggedSpent + monthlyFixedPaid);
 
-  const capValue = Number(capInput !== '' ? capInput : monthlyBudgetCap) || 0;
+  const capValue = Math.max(0, Number(capInput !== '' ? capInput : monthlyBudgetCap) || 0);
 
   // Handlers for Recurring Expenses
   const handleOpenAddRec = () => {
@@ -256,9 +267,8 @@ const Expenses = () => {
       {/* 1. Top Row: Total Spent Summary Card & Segmented Budget Cap */}
       <div className="mb-24" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', alignItems: 'stretch' }}>
         <Card
-          hover={false}
           style={{
-            background: '#ECFDF5',
+            background: 'var(--bg2)',
             display: 'flex',
             alignItems: 'center',
             gap: '16px',
@@ -271,7 +281,8 @@ const Expenses = () => {
               width: '48px',
               height: '48px',
               borderRadius: '12px',
-              background: '#D1FAE5',
+              background: 'var(--bg4)',
+              border: 'var(--bw) solid var(--border)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -279,25 +290,25 @@ const Expenses = () => {
             }}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M21 7H3C2.44772 7 2 7.44772 2 8V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V8C22 7.44772 21.5523 7 21 7Z" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M16 14C16.5523 14 17 13.5523 17 13C17 12.4477 16.5523 12 16 12C15.4477 12 15 12.4477 15 13C15 13.5523 15.4477 14 16 14Z" fill="#059669"/>
-              <path d="M4 7V6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V7" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M21 7H3C2.44772 7 2 7.44772 2 8V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V8C22 7.44772 21.5523 7 21 7Z" stroke="var(--budget-savings, #58A77B)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M16 14C16.5523 14 17 13.5523 17 13C17 12.4477 16.5523 12 16 12C15.4477 12 15 12.4477 15 13C15 13.5523 15.4477 14 16 14Z" fill="var(--budget-savings, #58A77B)"/>
+              <path d="M4 7V6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V7" stroke="var(--budget-savings, #58A77B)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
           <div>
-            <div style={{ fontSize: '0.78rem', fontWeight: 900, textTransform: 'uppercase', color: '#1F2937', letterSpacing: '0.02em' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 900, textTransform: 'uppercase', color: 'var(--text)', letterSpacing: '0.02em' }}>
               TOTAL AMOUNT SPENT
             </div>
-            <div style={{ fontSize: '2rem', fontWeight: 900, color: '#10B981', lineHeight: 1.15, marginTop: '2px', marginBottom: '2px' }}>
+            <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--budget-savings, #58A77B)', lineHeight: 1.15, marginTop: '2px', marginBottom: '2px' }}>
               ₹{totalMonthSpent.toLocaleString()}
             </div>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4B5563' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text2)' }}>
               This Month
             </div>
           </div>
         </Card>
 
-        <Card hover={false} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px 24px' }}>
+        <Card style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px 24px' }}>
           <div className="flex flex-between flex-center mb-12 flex-wrap gap-8">
             <div className="flex flex-center gap-8" style={{ borderBottom: 'var(--bw) solid var(--border)', paddingBottom: '4px' }}>
               <span style={{ fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.9rem' }}>
@@ -408,7 +419,7 @@ const Expenses = () => {
       </div>
 
       {/* 4. Recent Expenses Section */}
-      <Card hover={false} style={{ padding: '20px' }}>
+      <Card style={{ padding: '20px' }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',

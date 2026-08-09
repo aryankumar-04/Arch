@@ -109,7 +109,7 @@ const TagPickerPopover = ({ assignedTagIds = [], onToggleTag, module = 'tasks' }
             left: 0,
             zIndex: 9999,
             width: '240px',
-            background: '#FFFFFF',
+            background: 'var(--bg2)',
             border: 'var(--bw) solid var(--border)',
             boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 4px 4px 0px var(--border)',
             padding: '12px',

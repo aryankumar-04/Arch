@@ -83,20 +83,30 @@ export const calculateNextDueAndStatus = (item) => {
     }
   }
 
-  // Roll forward if nextDue is in past and NOT explicitly marked paid in current cycle
+  // Check if paid in current cycle
   let isPaidForCurrentCycle = false;
   if (lastPaidDate) {
-    const timeDiff = today.getTime() - new Date(lastPaidDate).setHours(0,0,0,0);
-    const daysSincePaid = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-    const cycleDays = getFrequencyDays(frequency);
-    if (daysSincePaid < cycleDays) {
-      isPaidForCurrentCycle = true;
+    const paidTime = new Date(lastPaidDate);
+    paidTime.setHours(0, 0, 0, 0);
+
+    if (frequency === 'Monthly') {
+      isPaidForCurrentCycle = (
+        paidTime.getFullYear() === today.getFullYear() &&
+        paidTime.getMonth() === today.getMonth()
+      );
+    } else if (frequency === 'Weekly') {
+      const daysDiff = Math.floor((today.getTime() - paidTime.getTime()) / (1000 * 60 * 60 * 24));
+      isPaidForCurrentCycle = daysDiff >= 0 && daysDiff < 7;
+    } else if (frequency === 'Yearly') {
+      isPaidForCurrentCycle = paidTime.getFullYear() === today.getFullYear();
+    } else {
+      const daysDiff = Math.floor((today.getTime() - paidTime.getTime()) / (1000 * 60 * 60 * 24));
+      isPaidForCurrentCycle = daysDiff >= 0 && daysDiff < getFrequencyDays(frequency);
     }
   }
 
   if (!isPaidForCurrentCycle) {
     while (nextDue < today) {
-      // If past today and unpaid, keep nextDue as the overdue date
       break;
     }
   }
@@ -111,16 +121,16 @@ export const calculateNextDueAndStatus = (item) => {
 
   if (isPaidForCurrentCycle) {
     statusText = 'Paid';
-    badgeBg = '#D1FAE5'; // Soft emerald green
+    badgeBg = '#D1FAE5';
     badgeColor = '#065F46';
   } else if (daysDiff < 0) {
     statusText = 'Overdue';
-    badgeBg = '#FEE2E2'; // Soft red
+    badgeBg = '#FEE2E2';
     badgeColor = '#991B1B';
     isOverdue = true;
   } else if (daysDiff === 0) {
     statusText = 'Due Today';
-    badgeBg = '#FFEDD5'; // Soft orange
+    badgeBg = '#FFEDD5';
     badgeColor = '#9A3412';
   } else if (daysDiff === 1) {
     statusText = 'Due Tomorrow';
@@ -128,7 +138,7 @@ export const calculateNextDueAndStatus = (item) => {
     badgeColor = '#9A3412';
   } else {
     statusText = `${daysDiff} Days Left`;
-    badgeBg = '#FEF3C7'; // Soft yellow
+    badgeBg = '#FEF3C7';
     badgeColor = '#92400E';
   }
 

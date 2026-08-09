@@ -221,19 +221,16 @@ const Movies = () => {
         <StatCard
           value={totalCount}
           label="TOTAL"
-          bg="#FFFFFF"
           color="var(--text)"
         />
         <StatCard
           value={watchlistCount}
           label="WATCHLIST"
-          bg="#FFFFFF"
           color="var(--text)"
         />
         <StatCard
           value={watchedCount}
           label="WATCHED"
-          bg="#FFFFFF"
           color="var(--text)"
         />
       </div>

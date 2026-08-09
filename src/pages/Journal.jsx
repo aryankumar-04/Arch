@@ -4,6 +4,7 @@ import Button from '../components/common/Button';
 import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
 import Skeleton from '../components/common/Skeleton';
+import DuplicateErrorBanner from '../components/common/DuplicateErrorBanner';
 import { PlusIcon, CalendarIcon } from '../components/common/Icons';
 
 export const getTotalSleepHours = (entry) => {
@@ -49,17 +50,14 @@ export const getMoodColor = (moodEmoji) => {
 };
 
 const getLast30Days = () => {
-  const days = [];
-  const now = new Date();
+  const dates = [];
+  const today = new Date();
   for (let i = 29; i >= 0; i--) {
-    const d = new Date(now);
+    const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    days.push(`${year}-${month}-${day}`);
+    dates.push(d.toISOString().split('T')[0]);
   }
-  return days;
+  return dates;
 };
 
 const Journal = () => {
@@ -71,6 +69,15 @@ const Journal = () => {
   const [isPastDateModalOpen, setIsPastDateModalOpen] = useState(false);
   const [customDateInput, setCustomDateInput] = useState(new Date().toISOString().split('T')[0]);
 
+  // Validation error state for Sleep + Nap total duration exceeding 24 hours
+  const [sleepErrorMsg, setSleepErrorMsg] = useState(null);
+
+  // Local time picker inputs to allow editing while blocking save on validation errors
+  const [sleepTimeInput, setSleepTimeInput] = useState('23:00');
+  const [wakeTimeInput, setWakeTimeInput] = useState('07:00');
+  const [napStartInput, setNapStartInput] = useState('');
+  const [napEndInput, setNapEndInput] = useState('');
+
   useEffect(() => {
     fetchEntries();
   }, [fetchEntries]);
@@ -79,15 +86,77 @@ const Journal = () => {
   useEffect(() => {
     if (!loading) {
       const today = new Date().toISOString().split('T')[0];
-      const todayEntry = entries.find(e => e.date === today);
+      const existingToday = entries.find(e => e.date === today);
 
-      if (todayEntry) {
-        setSelectedId(todayEntry.id);
+      if (existingToday) {
+        if (!selectedId) setSelectedId(existingToday.id);
       } else if (entries.length > 0) {
-        setSelectedId(entries[0].id);
+        if (!selectedId) setSelectedId(entries[0].id);
+      } else {
+        handleCreateToday();
       }
     }
-  }, [loading, entries]);
+  }, [loading, entries, selectedId]);
+
+  // Find active selected entry
+  const activeEntry = entries.find(e => e.id === selectedId) || entries[0];
+
+  // Sync local time inputs with active entry when active entry changes
+  useEffect(() => {
+    if (activeEntry) {
+      setSleepTimeInput(activeEntry.sleepTime || '23:00');
+      setWakeTimeInput(activeEntry.wakeTime || '07:00');
+      setNapStartInput(activeEntry.napStartTime || activeEntry.eveningNap?.napStart || '');
+      setNapEndInput(activeEntry.napEndTime || activeEntry.eveningNap?.napEnd || '');
+    }
+  }, [
+    activeEntry?.id, 
+    activeEntry?.sleepTime, 
+    activeEntry?.wakeTime, 
+    activeEntry?.napStartTime, 
+    activeEntry?.napEndTime,
+    activeEntry?.eveningNap?.napStart,
+    activeEntry?.eveningNap?.napEnd
+  ]);
+
+  // Helper to calculate hours between two HH:MM time strings
+  const calcTimeDiffHours = (startTimeVal, endTimeVal) => {
+    if (!startTimeVal || !endTimeVal) return 0;
+    const [sH, sM] = startTimeVal.split(':').map(Number);
+    const [eH, eM] = endTimeVal.split(':').map(Number);
+    if (isNaN(sH) || isNaN(sM) || isNaN(eH) || isNaN(eM)) return 0;
+    let start = sH * 60 + sM;
+    let end = eH * 60 + eM;
+    if (end <= start) end += 24 * 60;
+    return (end - start) / 60;
+  };
+
+  // Real-time validation check on active entry
+  useEffect(() => {
+    if (!activeEntry) {
+      setSleepErrorMsg(null);
+      return;
+    }
+    const night = parseFloat(activeEntry.sleepHours || activeEntry.sleepCycle?.duration || 0) || 0;
+    const nap = parseFloat(activeEntry.napHours || activeEntry.eveningNap?.duration || 0) || 0;
+    const total = Number((night + nap).toFixed(1));
+
+    if (total > 24.0) {
+      setSleepErrorMsg(`Total sleep + nap duration (${total.toFixed(1)} hrs) exceeds the 24-hour limit in a single day.`);
+    } else {
+      setSleepErrorMsg(null);
+    }
+  }, [
+    activeEntry?.id, 
+    activeEntry?.sleepHours, 
+    activeEntry?.napHours, 
+    activeEntry?.sleepTime, 
+    activeEntry?.wakeTime, 
+    activeEntry?.napStartTime, 
+    activeEntry?.napEndTime,
+    activeEntry?.sleepCycle?.duration,
+    activeEntry?.eveningNap?.duration
+  ]);
 
   const last30Days = getLast30Days();
 
@@ -100,9 +169,6 @@ const Journal = () => {
       if (newEntry) setSelectedId(newEntry.id);
     }
   };
-
-  // Find active selected entry
-  const activeEntry = entries.find(e => e.id === selectedId) || entries[0];
 
   const handleCreateToday = async () => {
     const today = new Date().toISOString().split('T')[0];
@@ -145,68 +211,84 @@ const Journal = () => {
     updateEntry(activeEntry.id, { habits: updatedHabits });
   };
 
-  // Sleep duration calculator
+  // Sleep duration calculator with 24h total validation (BLOCKS SAVE IF EXCEEDED)
   const handleSleepTimeChange = (sleepTimeVal, wakeTimeVal) => {
     if (!activeEntry) return;
-    let hours = activeEntry.sleepHours || '8.0';
+    setSleepTimeInput(sleepTimeVal);
+    setWakeTimeInput(wakeTimeVal);
 
+    let nightHoursNum = 8.0;
     if (sleepTimeVal && wakeTimeVal) {
-      const [sH, sM] = sleepTimeVal.split(':').map(Number);
-      const [wH, wM] = wakeTimeVal.split(':').map(Number);
-
-      let start = sH * 60 + sM;
-      let end = wH * 60 + wM;
-      if (end <= start) end += 24 * 60;
-
-      const diffMins = end - start;
-      hours = (diffMins / 60).toFixed(1);
+      nightHoursNum = calcTimeDiffHours(sleepTimeVal, wakeTimeVal);
     }
 
-    const durationNum = parseFloat(hours) || 0;
+    const nightHoursStr = nightHoursNum.toFixed(1);
+    const currentNapHours = (napStartInput && napEndInput) 
+      ? calcTimeDiffHours(napStartInput, napEndInput) 
+      : (parseFloat(activeEntry.napHours || activeEntry.eveningNap?.duration || 0) || 0);
+
+    const totalCandidate = Number((nightHoursNum + currentNapHours).toFixed(1));
+
+    if (totalCandidate > 24.0) {
+      setSleepErrorMsg(`Total sleep + nap duration (${totalCandidate.toFixed(1)} hrs) exceeds the 24-hour limit in a single day.`);
+      // DO NOT save or update store/analytics when invalid!
+      return;
+    }
+
+    setSleepErrorMsg(null);
+
     const sleepCycle = {
       bedtime: sleepTimeVal,
       wakeTime: wakeTimeVal,
-      duration: durationNum,
+      duration: nightHoursNum,
       quality: activeEntry.sleepQuality || 'Restful'
     };
 
     updateEntry(activeEntry.id, {
       sleepTime: sleepTimeVal,
       wakeTime: wakeTimeVal,
-      sleepHours: hours,
+      sleepHours: nightHoursStr,
       sleepCycle
     });
   };
 
-  // Nap duration calculator
+  // Nap duration calculator with 24h total validation (BLOCKS SAVE IF EXCEEDED)
   const handleNapTimeChange = (napStartVal, napEndVal) => {
     if (!activeEntry) return;
-    let hours = '0.0';
+    setNapStartInput(napStartVal);
+    setNapEndInput(napEndVal);
 
+    let napHoursNum = 0.0;
     if (napStartVal && napEndVal) {
-      const [sH, sM] = napStartVal.split(':').map(Number);
-      const [wH, wM] = napEndVal.split(':').map(Number);
-
-      let start = sH * 60 + sM;
-      let end = wH * 60 + wM;
-      if (end <= start) end += 24 * 60;
-
-      const diffMins = end - start;
-      hours = (diffMins / 60).toFixed(1);
+      napHoursNum = calcTimeDiffHours(napStartVal, napEndVal);
     }
 
-    const durationNum = parseFloat(hours) || 0;
+    const napHoursStr = napHoursNum.toFixed(1);
+    const currentNightHours = (sleepTimeInput && wakeTimeInput)
+      ? calcTimeDiffHours(sleepTimeInput, wakeTimeInput)
+      : (parseFloat(activeEntry.sleepHours || activeEntry.sleepCycle?.duration || 0) || 0);
+
+    const totalCandidate = Number((currentNightHours + napHoursNum).toFixed(1));
+
+    if (totalCandidate > 24.0) {
+      setSleepErrorMsg(`Total sleep + nap duration (${totalCandidate.toFixed(1)} hrs) exceeds the 24-hour limit in a single day.`);
+      // DO NOT save or update store/analytics when invalid!
+      return;
+    }
+
+    setSleepErrorMsg(null);
+
     const eveningNap = {
       napStart: napStartVal || '',
       napEnd: napEndVal || '',
-      duration: durationNum,
+      duration: napHoursNum,
       quality: activeEntry.napQuality || activeEntry.eveningNap?.quality || 'Restful'
     };
 
     updateEntry(activeEntry.id, {
       napStartTime: napStartVal,
       napEndTime: napEndVal,
-      napHours: hours,
+      napHours: napHoursStr,
       eveningNap
     });
   };
@@ -403,14 +485,24 @@ const Journal = () => {
                 <div className="card-title mb-12 flex align-center gap-8">
                   <span>😴</span> SLEEP CYCLE TRACKER
                 </div>
+
+                {sleepErrorMsg && (
+                  <DuplicateErrorBanner
+                    title="SLEEP DURATION EXCEEDED"
+                    message={sleepErrorMsg}
+                    onClose={() => setSleepErrorMsg(null)}
+                    autoDismissMs={0}
+                  />
+                )}
+
                 <div className="form-row">
                   <div className="form-group">
                     <label>BEDTIME</label>
                     <input
                       type="time"
                       className="form-input"
-                      value={activeEntry.sleepTime || '23:00'}
-                      onChange={(e) => handleSleepTimeChange(e.target.value, activeEntry.wakeTime || '07:00')}
+                      value={sleepTimeInput}
+                      onChange={(e) => handleSleepTimeChange(e.target.value, wakeTimeInput)}
                     />
                   </div>
 
@@ -419,8 +511,8 @@ const Journal = () => {
                     <input
                       type="time"
                       className="form-input"
-                      value={activeEntry.wakeTime || '07:00'}
-                      onChange={(e) => handleSleepTimeChange(activeEntry.sleepTime || '23:00', e.target.value)}
+                      value={wakeTimeInput}
+                      onChange={(e) => handleSleepTimeChange(sleepTimeInput, e.target.value)}
                     />
                   </div>
 
@@ -429,9 +521,9 @@ const Journal = () => {
                     <input
                       type="text"
                       className="form-input"
-                      value={`${activeEntry.sleepHours || '8.0'} HRS`}
+                      value={`${calcTimeDiffHours(sleepTimeInput, wakeTimeInput).toFixed(1)} HRS`}
                       readOnly
-                      style={{ fontWeight: 900, background: 'var(--bg2)' }}
+                      style={{ fontWeight: 900, background: 'var(--bg2)', color: 'var(--text)' }}
                     />
                   </div>
 
@@ -443,9 +535,9 @@ const Journal = () => {
                       onChange={(e) => {
                         const newQuality = e.target.value;
                         const sleepCycle = {
-                          bedtime: activeEntry.sleepTime || '23:00',
-                          wakeTime: activeEntry.wakeTime || '07:00',
-                          duration: parseFloat(activeEntry.sleepHours || 8.0),
+                          bedtime: sleepTimeInput,
+                          wakeTime: wakeTimeInput,
+                          duration: calcTimeDiffHours(sleepTimeInput, wakeTimeInput),
                           quality: newQuality
                         };
                         updateEntry(activeEntry.id, {
@@ -475,8 +567,8 @@ const Journal = () => {
                     <input
                       type="time"
                       className="form-input"
-                      value={activeEntry.napStartTime || activeEntry.eveningNap?.napStart || ''}
-                      onChange={(e) => handleNapTimeChange(e.target.value, activeEntry.napEndTime || activeEntry.eveningNap?.napEnd || '')}
+                      value={napStartInput}
+                      onChange={(e) => handleNapTimeChange(e.target.value, napEndInput)}
                     />
                   </div>
 
@@ -485,8 +577,8 @@ const Journal = () => {
                     <input
                       type="time"
                       className="form-input"
-                      value={activeEntry.napEndTime || activeEntry.eveningNap?.napEnd || ''}
-                      onChange={(e) => handleNapTimeChange(activeEntry.napStartTime || activeEntry.eveningNap?.napStart || '', e.target.value)}
+                      value={napEndInput}
+                      onChange={(e) => handleNapTimeChange(napStartInput, e.target.value)}
                     />
                   </div>
 
@@ -495,9 +587,9 @@ const Journal = () => {
                     <input
                       type="text"
                       className="form-input"
-                      value={`${activeEntry.napHours || activeEntry.eveningNap?.duration || '0.0'} HRS`}
+                      value={`${calcTimeDiffHours(napStartInput, napEndInput).toFixed(1)} HRS`}
                       readOnly
-                      style={{ fontWeight: 900, background: 'var(--bg2)' }}
+                      style={{ fontWeight: 900, background: 'var(--bg2)', color: 'var(--text)' }}
                     />
                   </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useCalendarStore } from '../store';
 import Button from '../components/common/Button';
+import Modal from '../components/common/Modal';
 import { PlusIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '../components/common/Icons';
 
 const COLOR_OPTIONS = [
@@ -10,7 +11,7 @@ const COLOR_OPTIONS = [
   { name: 'Blue', hex: '#2563EB' }
 ];
 
-const EVENT_TYPES = ['Custom', 'Workout', 'Task', 'Exam', 'Movie', 'Meeting'];
+const EVENT_TYPES = ['Exam', 'Assignment', 'Workout', 'Personal', 'Meeting', 'Other'];
 
 const getLocalYMD = (dateObj = new Date()) => {
   const year = dateObj.getFullYear();
@@ -231,98 +232,87 @@ const Calendar = () => {
       </button>
 
       {/* Modal - NEW EVENT */}
-      {isModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
-              <h3>NEW EVENT</h3>
-              <button className="modal-close" onClick={() => setIsModalOpen(false)}>
-                <CloseIcon size={16} />
-              </button>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="NEW EVENT">
+        <form onSubmit={handleSaveEvent}>
+          <div className="form-group">
+            <label>TITLE</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Event name"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>DATE</label>
+              <input
+                type="date"
+                className="form-input"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                required
+              />
             </div>
 
-            <form onSubmit={handleSaveEvent} className="modal-body">
-              <div className="form-group">
-                <label>TITLE</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Event name"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>DATE</label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>TYPE</label>
-                  <select
-                    className="form-select"
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                  >
-                    {EVENT_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>COLOR</label>
-                <div className="flex gap-12" style={{ marginTop: '4px' }}>
-                  {COLOR_OPTIONS.map((c) => (
-                    <button
-                      key={c.hex}
-                      type="button"
-                      onClick={() => setColor(c.hex)}
-                      className={`color-dot-btn ${color === c.hex ? 'selected' : ''}`}
-                      style={{ background: c.hex, color: '#FFFFFF', fontSize: '14px', fontWeight: 'bold', display: 'grid', placeItems: 'center' }}
-                      title={c.name}
-                    >
-                      {color === c.hex ? '✓' : ''}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>DESCRIPTION</label>
-                <textarea
-                  className="form-textarea"
-                  placeholder="Details..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex gap-12" style={{ justifyContent: 'flex-end', marginTop: '24px' }}>
-                <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>
-                  CANCEL
-                </Button>
-                <Button type="submit" variant="primary">
-                  SAVE
-                </Button>
-              </div>
-            </form>
+            <div className="form-group">
+              <label>TYPE</label>
+              <select
+                className="form-select"
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+              >
+                {EVENT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="form-group">
+            <label>COLOR</label>
+            <div className="flex gap-12" style={{ marginTop: '4px' }}>
+              {COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c.hex}
+                  type="button"
+                  onClick={() => setColor(c.hex)}
+                  className={`color-dot-btn ${color === c.hex ? 'selected' : ''}`}
+                  style={{ background: c.hex, color: '#FFFFFF', fontSize: '14px', fontWeight: 'bold', display: 'grid', placeItems: 'center' }}
+                  title={c.name}
+                >
+                  {color === c.hex ? '✓' : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>DESCRIPTION</label>
+            <textarea
+              className="form-textarea"
+              placeholder="Details..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="flex gap-12" style={{ justifyContent: 'flex-end', marginTop: '24px' }}>
+            <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>
+              CANCEL
+            </Button>
+            <Button type="submit" variant="primary">
+              SAVE
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

@@ -79,7 +79,7 @@ export const ActivityBreakdown = ({ problems = [] }) => {
   const codeforcesStyle = getArmStyle(pcts.Codeforces);
 
   return (
-    <Card hover={false} style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px 24px' }}>
+    <Card style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px 24px' }}>
       <div>
         <div style={{ fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.9rem', borderBottom: 'var(--bw) solid var(--border)', paddingBottom: '4px' }}>
           🎯 ACTIVITY BREAKDOWN

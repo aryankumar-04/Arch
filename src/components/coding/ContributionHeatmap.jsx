@@ -155,7 +155,7 @@ export const ContributionHeatmap = ({ problems = [] }) => {
   const totalWeeksCount = Math.max(1, weeks.length);
 
   return (
-    <Card hover={false} style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px 24px' }}>
+    <Card style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px 24px' }}>
       <div>
         {/* Header with Title and Year Selector */}
         <div className="flex flex-between flex-center mb-16 flex-wrap gap-8">
