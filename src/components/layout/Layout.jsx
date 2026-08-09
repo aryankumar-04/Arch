@@ -41,7 +41,8 @@ const Layout = () => {
 
   const prevPathRef = useRef(location.pathname);
   const contentRef = useRef(null);
-  const [slideDirection, setSlideDirection] = useState('slide-up');
+  // Ref for the animation wrapper — used to re-trigger CSS animation without unmounting children
+  const transitionRef = useRef(null);
 
   // Quiet background pre-fetching of tab data after initial mount so all tabs are cached & instant
   useEffect(() => {
@@ -62,13 +63,20 @@ const Layout = () => {
       const prevIdx = getRouteIndex(prevPathRef.current);
       const currentIdx = getRouteIndex(location.pathname);
 
-      if (currentIdx > prevIdx) {
-        setSlideDirection('slide-up');
-      } else if (currentIdx < prevIdx) {
-        setSlideDirection('slide-down');
-      }
+      const direction = currentIdx > prevIdx ? 'slide-up' : 'slide-down';
 
       prevPathRef.current = location.pathname;
+
+      // Re-trigger the CSS animation by removing and re-adding the class.
+      // This avoids using key={...} which would unmount/remount child components
+      // and destroy their state (the root cause of the dashboard layout persistence bug).
+      if (transitionRef.current) {
+        const el = transitionRef.current;
+        el.classList.remove('slide-up', 'slide-down');
+        // Force a reflow so the browser recognizes the class removal before re-adding
+        void el.offsetWidth;
+        el.classList.add(direction);
+      }
 
       // Scroll content container & window back to top when opening a new tab
       if (contentRef.current) {
@@ -84,7 +92,7 @@ const Layout = () => {
       <div className="main">
         <Topbar onMenuToggle={() => setSidebarOpen(prev => !prev)} />
         <main ref={contentRef} className="page-content" style={{ overflowX: 'hidden', position: 'relative' }}>
-          <div key={location.pathname} className={`page-transition-container ${slideDirection}`}>
+          <div ref={transitionRef} className="page-transition-container slide-up">
             <Outlet />
           </div>
         </main>

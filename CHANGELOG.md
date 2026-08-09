@@ -2,6 +2,17 @@
 
 All notable changes to the **ARCH** personal operating system dashboard will be documented in this file.
 
+## [1.8.4] - 2026-08-09
+
+### 🎛️ Fully Customizable Dashboard Layouts & Presets
+- **Interactive Grid Customization**: Drag, resize, remove, and add widgets dynamically with Undo/Redo history stack, bounded container collision containment, and zero layout overflow.
+- **Seeded Baseline "Default" Preset**: Every user gets a seeded, permanent, non-deletable "Default" preset reflecting the original out-of-the-box layout.
+- **Custom Named Presets ($\le 10$)**: Create, rename, edit, and switch between up to 10 custom user presets with dynamic active-preset dropdown labels (`📂 WORK MODE ▾`).
+- **Layout Uniqueness & Capacity Enforcement**: Prevents duplicate layout configurations with theme-consistent error notifications (`⚠️ DUPLICATE LAYOUT DETECTED`, `⚠️ PRESET LIMIT REACHED (10/10)`).
+- **Dual Isolation & Remote Sync**: Per-user `localStorage` caching combined with Firestore document sync (`/users/{userId}/dashboard/...`), strictly isolated per UID with server-side Security Rules (`request.auth.uid == userId`).
+- **Edit Mode Navigation Lock**: Global navigation (sidebar tab links, topbar search, logout button) is locked and dimmed (`.nav-locked`) during Edit Mode, displaying warning toasts on click and native `beforeunload` prompts on browser refresh/close.
+- **Theme & Accent Color Integration**: All buttons (`✏️ EDIT`, `✓ Done`, `Save Preset`, `+ Create New Preset`), widget remove buttons, resize handles, drag placeholders, and dropdown hover states follow the active theme's accent color (`var(--accent)`), maintaining high contrast and 100% visibility in both Light and Dark themes.
+
 ## [1.8.3] - 2026-08-09
 
 ### 🎨 Theme-Adaptive Logo & Favicon System

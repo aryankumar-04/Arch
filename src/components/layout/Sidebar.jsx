@@ -34,6 +34,31 @@ const navItems = [
 ];
 
 const Sidebar = memo(({ isOpen, onClose }) => {
+  const [isLocked, setIsLocked] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleEditMode = (e) => {
+      setIsLocked(Boolean(e.detail?.isEditing));
+    };
+    window.addEventListener('arch-dashboard-edit-mode', handleEditMode);
+    return () => {
+      window.removeEventListener('arch-dashboard-edit-mode', handleEditMode);
+    };
+  }, []);
+
+  const handleNavClick = (e, item) => {
+    if (isLocked && item.path !== '/') {
+      e.preventDefault();
+      e.stopPropagation();
+      window.dispatchEvent(new CustomEvent('arch-nav-blocked'));
+      return;
+    }
+    onClose();
+    if (item.path === '/calendar') {
+      window.dispatchEvent(new CustomEvent('reset-calendar'));
+    }
+  };
+
   return (
     <>
       <div className={`sidebar-overlay ${isOpen ? 'open' : ''}`} onClick={onClose} />
@@ -53,13 +78,8 @@ const Sidebar = memo(({ isOpen, onClose }) => {
             <NavLink 
               to={item.path} 
               key={item.name}
-              onClick={() => {
-                onClose();
-                if (item.path === '/calendar') {
-                  window.dispatchEvent(new CustomEvent('reset-calendar'));
-                }
-              }}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              onClick={(e) => handleNavClick(e, item)}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${isLocked && item.path !== '/' ? 'nav-locked' : ''}`}
             >
               <span>{item.icon}</span>
               <span>{item.name}</span>
